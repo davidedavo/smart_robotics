@@ -2,7 +2,7 @@
 
 ## Installation
 ```bash
-git clone ...
+git clone https://github.com/davidedavo/smart_robotics.git
 cd smart_robotics/docker
 ./build.sh
 ./run.sh
