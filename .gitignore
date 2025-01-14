@@ -1,0 +1,40 @@
+gazebo_cache
+
+# Python bytecode files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Virtual environment directories
+venv/
+env/
+.venv/
+.env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS-specific files
+.DS_Store
+
+# Linux-specific files
+*~
+
+# Log files
+*.log
+
+# Dependency directories
+node_modules/
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+.eggs/
