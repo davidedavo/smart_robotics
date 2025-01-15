@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 parent_dir=$(dirname "$(pwd)")
 code_dir="${parent_dir}/src"
 cache_dir="${parent_dir}/gazebo_cache"
