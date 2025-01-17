@@ -1,4 +1,9 @@
+workspace/devel
 gazebo_cache
+.catkin_tools
+logs
+.rosinstall*
+workspace/src/CMakeLists.txt
 
 # Python bytecode files
 *.pyc
