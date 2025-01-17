@@ -13,16 +13,16 @@ cd docker
 Now you are inside the container.
 
 ## Build panda simulator package
-Run the following code:
+Run the following code at the first run, after the docker build:
 ```bash
 cd src/panda_simulator
 ./build_ws.sh
-
 cd ../..
-source devel/setup.bash
+catkin build
 ```
 
 ## Run gazebo with panda robot
 ```bash
+source devel/setup.bash
 roslaunch panda_gazebo panda_world.launch
 ```

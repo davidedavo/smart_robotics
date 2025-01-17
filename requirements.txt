@@ -1,4 +1,6 @@
-numpy 
-numpy-quaternion==2020.5.11.13.33.35
+numpy==1.21
+numba
+scipy
+panda-robot
 future
 opencv-python

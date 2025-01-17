@@ -40,6 +40,8 @@ RUN apt-get update \
     python3-catkin \
     python3-catkin-tools \
     ros-${ROS_DISTRO}-libfranka \
+    ros-${ROS_DISTRO}-franka-ros \
+    ros-${ROS_DISTRO}-panda-moveit-config \
     ros-${ROS_DISTRO}-gazebo-ros-control \
     ros-${ROS_DISTRO}-rospy-message-converter \
     ros-${ROS_DISTRO}-effort-controllers \
@@ -62,7 +64,7 @@ ENV LD_LIBRARY_PATH /opt/ros/${ROS_DISTRO}/lib/x86_64-linux-gnu:${LD_LIBRARY_PAT
 
 # Install python requirements
 RUN ln -s /usr/bin/python3 /usr/bin/python
-COPY requirements.txt ./requirements.txt
+COPY ./requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
 
 # Set up the default command (Bash shell)
