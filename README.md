@@ -3,16 +3,26 @@
 ## Installation
 ```bash
 git clone https://github.com/davidedavo/smart_robotics.git
-cd smart_robotics/docker
+cd smart_robotics
+git submodule update --init
+cd docker
 ./build.sh
 ./run.sh
 ```
 
 Now you are inside the container.
 
-## Run empty Gazebo
-Once you are inside the docker container, run:
+## Build panda simulator package
+Run the following code:
 ```bash
-./run_gazebo.sh
+cd src/panda_simulator
+./build_ws.sh
+
+cd ../..
+source devel/setup.bash
 ```
-Note: the first run it might take a while.
+
+## Run gazebo with panda robot
+```bash
+roslaunch panda_gazebo panda_world.launch
+```
