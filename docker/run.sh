@@ -9,9 +9,22 @@ mkdir -p $cache_dir
 touch /tmp/.docker.xauth
 xauth nlist $DISPLAY | sed -e 's/^..../ffff/' | xauth -f /tmp/.docker.xauth nmerge - 
 
+command_exists () {
+    type "$1" &> /dev/null ;
+}
+
+if command_exists nvidia-smi; then
+      extra_params="--gpus all --runtime nvidia"
+      echo -e "\t[INFO] nvidia gpus exists"
+else
+      extra_params=""
+      echo -e "\t[INFO] nvidia gpus does not exist (falling back to docker). Rviz and Gazebo most likely will not work!"
+fi
+
 docker run -it --rm  \
     --name ros_gazebo \
-    --gpus all \
+    $extra_params \
+    --env="QT_X11_NO_MITSHM=1" \
     --shm-size=2gb \
     --privileged \
     -v $workspace_dir:/workspace \
@@ -20,6 +33,7 @@ docker run -it --rm  \
     --volume /tmp/.X11-unix:/tmp/.X11-unix \
     --env DISPLAY=$DISPLAY \
     --env XAUTHORITY=/tmp/.docker.xauth \
+    --device /dev/dri:/dev/dri -v /dev/dri:/dev/dri \
     --net=host \
     -w /workspace \
     ros-gazebo

@@ -7,11 +7,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Update package list and install dependencies
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y \
+    build-essential \
+    swig \ 
+    python3-future \
+    libcppunit-dev \
     curl \
     gnupg2 \
     lsb-release \
     wget \
-    build-essential \
     software-properties-common \
     python3-pip \
     x11-apps \
@@ -27,6 +30,7 @@ RUN curl -sSL http://packages.ros.org/ros.key | apt-key add - \
 
 
 ENV ROS_DISTRO noetic
+
 # Install ROS 1 Noetic (Desktop version)
 RUN apt-get update \
     && apt-get install -y \
@@ -49,6 +53,7 @@ RUN apt-get update \
     ros-${ROS_DISTRO}-moveit \
     ros-${ROS_DISTRO}-moveit-commander \
     ros-${ROS_DISTRO}-moveit-visual-tools \
+    ros-${ROS_DISTRO}-combined-robot-hw \
     && rm -rf /var/lib/apt/lists/*
 
 # Initialize rosdep
@@ -66,6 +71,17 @@ ENV LD_LIBRARY_PATH /opt/ros/${ROS_DISTRO}/lib/x86_64-linux-gnu:${LD_LIBRARY_PAT
 RUN ln -s /usr/bin/python3 /usr/bin/python
 COPY ./requirements.txt ./requirements.txt
 RUN pip install -r requirements.txt
+
+# nvidia-container-runtime
+ENV NVIDIA_VISIBLE_DEVICES \
+    ${NVIDIA_VISIBLE_DEVICES:-all}
+ENV NVIDIA_DRIVER_CAPABILITIES \
+    ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics
+
+
+# setup entrypoint
+COPY ./ros_entrypoint.sh /
+ENTRYPOINT ["/ros_entrypoint.sh"]
 
 # Set up the default command (Bash shell)
 CMD ["/bin/bash"]
