@@ -11,7 +11,7 @@
 
     <model name='table_marble'>
       <static>1</static>
-      <pose>0.697907 0.051791 0.257791 0 -0 0</pose>
+      <pose>0.508074 0.051791 0.257791 0 -0 1.570796</pose>
       <link name='link'>
         <collision name='collision'>
           <geometry>
@@ -48,6 +48,44 @@
               <name>Table/Marble_Lightmap</name>
             </script>
             <lighting>0</lighting>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model>
+
+    <model name='unit_box'>
+      <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
+      <scale>0.05 0.05 0.05</scale>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>1.0</mu>
+                <mu2>1.0</mu2>
+              </ode>
+            </friction>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+            </script>
           </material>
         </visual>
         <self_collide>0</self_collide>
