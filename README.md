@@ -24,5 +24,13 @@ catkin build
 ## Run gazebo with panda robot
 ```bash
 source devel/setup.bash
-roslaunch panda_gazebo panda_world.launch
+roslaunch smart_robotics smart_robotics.launch
 ```
+
+In another terminal:
+```bash
+source devel/setup.bash
+cd src/smart_robotics
+python test.py
+```
+
