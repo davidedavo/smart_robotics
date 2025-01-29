@@ -25,12 +25,15 @@
             <contact>
               <ode/>
             </contact>
-            <bounce/>
+            <bounce>
+              <restitution_coefficient>0.1</restitution_coefficient> <!-- Riduci il valore per meno rimbalzo -->
+              <threshold>10.0</threshold>
+            </bounce>
             <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
+              <ode>
+                <mu>1.0</mu>  <!-- Valore standard per un tavolo normale -->
+                <mu2>0.8</mu2> 
+              </ode>
             </friction>
           </surface>
         </collision>
@@ -60,6 +63,14 @@
       <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='link'>
+      <inertial>
+        <mass>0.2</mass> <!-- Puoi aumentare questo valore se la box è troppo leggera -->
+        <inertia>
+          <ixx>0.0001</ixx>
+          <iyy>0.0001</iyy>
+          <izz>0.0001</izz>
+        </inertia>
+      </inertial>
         <collision name='collision'>
           <geometry>
             <box>
@@ -69,10 +80,17 @@
           <surface>
             <friction>
               <ode>
-                <mu>1.0</mu>
-                <mu2>1.0</mu2>
+                <mu>2.0</mu>  <!-- Aumenta l'attrito statico per evitare scivolamenti -->
+                <mu2>1.5</mu2> <!-- Un po' meno attrito dinamico per movimenti più fluidi -->
+                <slip1>0.0</slip1> <!-- Nessuno slittamento sulla prima direzione -->
+                <slip2>0.0</slip2> <!-- Nessuno slittamento sulla seconda direzione -->
               </ode>
             </friction>
+            <!-- Aggiungi le impostazioni di rimbalzo e smorzamento qui -->
+            <bounce>
+              <restitution_coefficient>0.05</restitution_coefficient>  <!-- Riduci il valore per meno rimbalzo -->
+              <threshold>10.0</threshold>
+            </bounce>
           </surface>
         </collision>
         <visual name='visual'>
@@ -99,7 +117,7 @@
     </physics>
     
     <gravity>
-      0.0 0.0 0.0
+      0.0 0.0 -9.81  <!-- Gravità sulla direzione Z (verso il basso) -->
     </gravity>
 
     <gui fullscreen='0'>
