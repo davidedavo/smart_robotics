@@ -64,12 +64,12 @@
       <scale>0.05 0.05 0.05</scale>
       <link name='link'>
       <inertial>
-        <mass>0.2</mass> <!-- Puoi aumentare questo valore se la box è troppo leggera -->
-        <inertia>
-          <ixx>0.0001</ixx>
-          <iyy>0.0001</iyy>
-          <izz>0.0001</izz>
-        </inertia>
+    <model name='unit_box'>
+      <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
+      <scale>0.05 0.05 0.05</scale>
+      <link name='box_link'>
+      <inertial>
+        <mass>0.01</mass>
       </inertial>
         <collision name='collision'>
           <geometry>
@@ -80,15 +80,14 @@
           <surface>
             <friction>
               <ode>
-                <mu>2.0</mu>  <!-- Aumenta l'attrito statico per evitare scivolamenti -->
-                <mu2>1.5</mu2> <!-- Un po' meno attrito dinamico per movimenti più fluidi -->
-                <slip1>0.0</slip1> <!-- Nessuno slittamento sulla prima direzione -->
-                <slip2>0.0</slip2> <!-- Nessuno slittamento sulla seconda direzione -->
+                <mu>2.0</mu>  
+                <mu2>1.5</mu2> 
+                <slip1>0.0</slip1>
+                <slip2>0.0</slip2>
               </ode>
             </friction>
-            <!-- Aggiungi le impostazioni di rimbalzo e smorzamento qui -->
             <bounce>
-              <restitution_coefficient>0.05</restitution_coefficient>  <!-- Riduci il valore per meno rimbalzo -->
+              <restitution_coefficient>0.05</restitution_coefficient>
               <threshold>10.0</threshold>
             </bounce>
           </surface>
@@ -112,12 +111,85 @@
       </link>
     </model>
 
+    <model name='kinect'>
+      <pose>0.504742 0.057064 2.25554 3.14159 1.57079 0.0</pose>
+      <static>1</static>
+      <link name='camera_link'>
+        <inertial>
+          <mass>0.1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.073 0.276 0.072</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>model://kinect/meshes/kinect.dae</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <sensor name='camera' type='depth'>
+          <update_rate>20</update_rate>
+          <camera>
+            <horizontal_fov>1.0472</horizontal_fov>
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.00005</near>
+              <far>3000000</far>
+            </clip>
+          </camera>
+          <plugin name="$kinect_controller" filename="libgazebo_ros_openni_kinect.so">
+            <alwaysOn>true</alwaysOn>
+            <updateRate>1.0</updateRate>
+            <cameraName>kinect_ir</cameraName>
+            <imageTopicName>/kinect/color/image_raw</imageTopicName>
+            <cameraInfoTopicName>/kinect/color/camera_info</cameraInfoTopicName>
+            <depthImageTopicName>/kinect/depth/image_raw</depthImageTopicName>
+            <depthImageInfoTopicName>/kinect/depth/camera_info</depthImageInfoTopicName>
+            <pointCloudTopicName>/kinect/depth/points</pointCloudTopicName>
+            <frameName>camera_link</frameName>
+            <pointCloudCutoff>0.0000000000005</pointCloudCutoff>
+            <pointCloudCutoffMax>300000.0</pointCloudCutoffMax>
+            <distortionK1>0.0</distortionK1>
+            <distortionK2>0.0</distortionK2>
+            <distortionK3>0.0</distortionK3>
+            <distortionT1>0.0</distortionT1>
+            <distortionT2>0.0</distortionT2>
+            <CxPrime>0</CxPrime>
+            <Cx>0</Cx>
+            <Cy>0</Cy>
+            <focalLength>0</focalLength>
+            <hackBaseline>0</hackBaseline>
+          </plugin>
+        </sensor>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model>
+
     <physics type="ode">
       <real_time_update_rate>1000.0</real_time_update_rate>
     </physics>
     
     <gravity>
-      0.0 0.0 -9.81  <!-- Gravità sulla direzione Z (verso il basso) -->
+      0.0 0.0 -9.81
     </gravity>
 
     <gui fullscreen='0'>
