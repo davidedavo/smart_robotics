@@ -59,11 +59,55 @@
       </link>
     </model>
 
-    <model name='unit_box'>
+    <!-- <model name='unit_cylinder'>
       <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='link'>
       <inertial>
+        <mass>0.01</mass>
+      </inertial>
+        <collision name='collision'>
+          <geometry>
+            <cylinder>
+              <radius>0.03</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>2.0</mu>
+                <mu2>1.5</mu2>
+                <slip1>0.0</slip1> 
+                <slip2>0.0</slip2>
+              </ode>
+            </friction>
+            <bounce>
+              <restitution_coefficient>0.05</restitution_coefficient>
+              <threshold>10.0</threshold>
+            </bounce>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <cylinder>
+              <radius>0.03</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+            </script>
+          </material>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model> -->
+
     <model name='unit_box'>
       <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
