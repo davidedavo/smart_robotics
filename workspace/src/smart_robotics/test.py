@@ -39,13 +39,12 @@ def main():
     if ret or True:
         panda.move_to_joint_position(tgt_joints)
     
-    rospy.sleep(2)
+    rospy.sleep(1)
 
     # Close the gripper to grasp the unit cube
     #gripper.close()
-    #gripper.apply_force(10.0)
     # Chiudi il gripper e afferra l'oggetto
-    success = gripper.grasp(width=object_width, force=grasp_force, speed=grasp_speed)
+    success = gripper.grasp(width=object_width - 0.01, force=grasp_force, speed=grasp_speed)
 
     if success:
         print("Oggetto afferrato con successo!")
