@@ -155,10 +155,10 @@
       </link>
     </model>
 
-    <model name='kinect'>
-      <pose>0.504742 0.057064 2.25554 3.14159 1.57079 0.0</pose>
+    <!-- <model name='kinect'>
       <static>1</static>
       <link name='camera_link'>
+        <pose>0.504742 0.057064 2.25554 3.14159 1.57079 0.0</pose>
         <inertial>
           <mass>0.1</mass>
           <inertia>
@@ -226,7 +226,7 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-    </model>
+    </model> -->
 
     <physics type="ode">
       <real_time_update_rate>1000.0</real_time_update_rate>

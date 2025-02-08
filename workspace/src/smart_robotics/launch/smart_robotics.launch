@@ -73,6 +73,9 @@
       <arg name="load_gripper" value="$(arg load_gripper)" />
   </include>
 
+  <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" output="screen"/> -->
+  <!-- <node pkg="tf" type="static_transform_publisher" name="base_to_avs" args="0.442152 0.109053 1.30005 3.14159 -1.55149 3.14159 world camera_link 100" />  -->
+
   <group if="$(eval arg('use_custom_action_servers') == true)">
     <node pkg="panda_sim_custom_action_server" type="start_joint_trajectory_server.py" name="joint_trajectory_server_emulator"/>
 
@@ -95,6 +98,22 @@
 
   <group if="$(eval arg('force_neutral_pose') == true)">
       <node pkg="panda_gazebo" type="force_neutral_pose.py" name="startup_script"/>
-  </group>   
+  </group>
+
+  
+  <arg name="kinect_xyz" default="0.504742 0.057064 1.4"/>
+  <arg name="kinect_rpy" default="3.14159 1.57079 0.0"/>
+  <!-- <group ns="camera">   -->
+  <param name="camera_description" command="$(find xacro)/xacro --inorder $(find smart_robotics)/robots/kinect.urdf.xacro kinect_xyz:='$(arg kinect_xyz)' kinect_rpy:='$(arg kinect_rpy)'"/>
+  <!-- <node name="camera_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" /> -->
+  <node name="camera_description" pkg="gazebo_ros" type="spawn_model" args="-param camera_description -sdf -model kinect"/>
+  <node pkg="tf" type="static_transform_publisher" name="world_to_camera" args="$(arg kinect_xyz) $(arg kinect_rpy) world camera_link 100" />
+  <!-- </group> -->
+  
+  
+  
+  <!-- <node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
+    args="-d $(find smart_robotics)/config/demo.rviz" output="screen">
+  </node> -->
 
 </launch>

@@ -4,6 +4,7 @@ gazebo_cache
 logs
 .rosinstall*
 workspace/src/CMakeLists.txt
+*.png
 
 # Python bytecode files
 *.pyc
