@@ -31,6 +31,13 @@ In another terminal:
 ```bash
 source devel/setup.bash
 cd src/smart_robotics
-python test.py
+python scripts/kinect_controller.py
+```
+
+In another terminal:
+```bash
+source devel/setup.bash
+cd src/smart_robotics
+python scripts/panda_controller.py
 ```
 
