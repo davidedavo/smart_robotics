@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
+from multiprocessing import Queue
 from pathlib import Path
+import signal
 import threading
 from time import sleep
 import numpy as np
@@ -11,23 +13,44 @@ from message_filters import Subscriber, ApproximateTimeSynchronizer
 import tf
 import tf.transformations as tft
 from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
+from custom_msg.msg import PosesWithScales
+from smart_robotics.scripts.object_detection import HardCodedObjectDetector
 
 class KinectController:
         
     def __init__(self):
         self.bridge = CvBridge()        
+
+        self.K = None
+
+
         # Subscribers for RGB and depth images
         self.rgb_sub = Subscriber("/kinect/color/image_raw", Image)
         self.depth_sub = Subscriber("/kinect/depth/image_raw", Image)
-        
         self.camera_info_sub = rospy.Subscriber("/kinect/color/camera_info", CameraInfo, self.camera_info_callback)
         self.tf_listener = tf.TransformListener()
         
-        # sleep(1)
-        # self.tf_listener.waitForTransform('world', 'camera_link', rospy.Time(0), rospy.Duration(4.0))
-        # (trans, rot) = self.tf_listener.lookupTransform('world', 'camera_link', rospy.Time(0))
-        # self.tf_listener.clear()
-        # del self.tf_listener
+        sleep(1)
+        self.tf_listener.waitForTransform('world', 'camera_link', rospy.Time(0), rospy.Duration(4.0))
+        (trans, rot) = self.tf_listener.lookupTransform('world', 'camera_link', rospy.Time(0))
+        self.tf_listener.clear()
+        del self.tf_listener
+
+        R = tft.quaternion_matrix(rot)
+        t = np.array(trans)
+        link_to_world = np.eye(4, dtype=np.float32)
+        link_to_world[:3, :3] = R[:3, :3]
+        link_to_world[:3, 3] = t
+
+        # Kin: [x->right, y->down, z->fwd] cam_link:[x->fwd, y-> left, z->up]
+        kin_to_link = np.array([
+            [0., 0., 1., 0.],
+            [-1., 0., 0., 0.],
+            [0., -1., 0., 0.],
+            [0., 0., 0., 1.],
+        ])  
+        self.c2w = link_to_world @ kin_to_link
         
         # Synchronize the topics
         self.images_ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=1, slop=0.1)
@@ -44,6 +67,12 @@ class KinectController:
         self._timestep = 0
 
         self._images_lock = threading.Lock()
+
+        self.processing_thread = threading.Thread(target=self._process)
+        self.is_processing = threading.Event()
+
+        self.object_detector = HardCodedObjectDetector()
+        self.publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
 
 
     def set_rgbd(self, rgb, depth):
@@ -85,15 +114,92 @@ class KinectController:
 
         self.set_rgbd(rgb_image, depth_image)
 
+    
+    def start_processing(self, *args, **kwrags) -> None:
+        self.is_processing.set()
+        self.processing_thread.start()
+                
+                
+    def stop_processing(self) -> None:
+        self.is_processing.clear()
+        self.processing_thread.join()
 
-    def __call__(self):
-        pass
+    
+    def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
+        B = bboxes.shape[0]
+        x_center, y_center = bboxes[:, 0], bboxes[:, 1]
+        p_screen = np.ones((B, 3), dtype=np.float32)
+        p_screen[:, :2] = bboxes[:, :2].astype(np.float32)
+        
+        depth_center = depth_image[y_center, x_center]
+        depth_table = depth_image[281, 310] # TODO: Automize this
+        mid_depth = (depth_table + depth_center) / 2
+
+        p_cam = p_screen @ np.linalg.inv(self.K).T 
+        p_cam *= mid_depth
+
+        p_cam_hom = np.concatenate([p_cam, np.ones((p_cam.shape[0], 1), dtype=np.float32)], axis=-1)
+        p_world = p_cam_hom @ self.c2w.T
+
+        orientations = np.zeros((B, 4), dtype=np.float32)
+        orientations[:, 0] = 1.
+
+        scales = np.ones((B, 4), dtype=np.float32) * 0.5
+        return p_world[:, :3], orientations, scales
+
+
+    def _process(self):
+        while not rospy.is_shutdown() and self.is_processing.is_set():
+            
+            rgb, depth = self.get_rgbd()
+            
+            if self.K is None or rgb is None or depth is None:
+                sleep(0.1)
+                continue
+            
+            print(f'Processing timestep {self.timestep}')
+
+            bboxes = self.object_detector.detect_box(rgb)
+            positions, orientations, scales = self.compute_poses_scales(bboxes, depth)
+
+            assert positions.shape[0] == orientations.shape[0] == scales.shape[0], "Shapes not consisntents."
+            N_dets = positions.shape[0]
+            if N_dets == 0:
+                sleep(0.1)
+                continue
+
+            try:
+                # Create a list of poses
+                msg_poses = []
+                msg_scales = []
+                for i in range(N_dets):
+                    px, py, pz = positions[i, 0], positions[i, 1], positions[i, 2]
+                    qw, qx, qy, qz = orientations[i, 0], orientations[i, 1], orientations[i, 2], orientations[i, 3]
+                    sx, sy, sz = scales[i, 0], scales[i, 1], scales[i, 2]
+
+                    pose = Pose(position=Point(px, py, pz), orientation=Quaternion(qx, qy, qz, qw))
+                    scale = Vector3(sx, sy, sz)
+                    msg_poses += [pose]
+                    msg_scales += [scale]
+
+                pose_array = PosesWithScales()
+                pose_array.header.stamp = rospy.Time.now()
+                pose_array.header.frame_id = 'world'
+                pose_array.poses = msg_poses
+                pose_array.scales = msg_scales
+                self.publisher.publish(pose_array)
+                
+            except Exception as e:
+                print(e)
 
 
 if __name__ == '__main__':
-    rospy.init_node("kinect_controller")
+    rospy.init_node("kinect_controller", log_level=rospy.WARN)
 
     kinect_controller = KinectController()
+    kinect_controller.start_processing()
+
+    signal.signal(signal.SIGINT, kinect_controller.stop_processing)
 
     while not rospy.is_shutdown():
         rospy.spin()

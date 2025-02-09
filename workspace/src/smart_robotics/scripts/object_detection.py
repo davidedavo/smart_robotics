@@ -14,10 +14,10 @@ class ObjectDetector(ABC):
 
 class HardCodedObjectDetector(ObjectDetector):
     def detect_box(self, rgb_image) -> np.ndarray:
-        x0 = 262
-        y0 = 218
-        w = 14
-        h = 14
+        x0 = 211
+        y0 = 198
+        w = 28
+        h = 28
         xc = x0 + w/2
         yc = y0 + h/2
         return np.array([[xc, yc, w, h]], dtype=np.int32)
