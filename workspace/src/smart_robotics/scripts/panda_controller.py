@@ -1,3 +1,4 @@
+import math
 from multiprocessing import Queue
 from queue import Full
 import signal
@@ -10,21 +11,36 @@ from panda_robot import PandaArm
 from custom_msg.msg import PosesWithScales
 
 
+def calculate_rotation(start, target):
+    delta_x = target[0] - start[0]
+    delta_y = target[1] - start[1]
+    
+    angle_rad = math.atan2(delta_y, delta_x)
+    
+    return angle_rad
+
+
 class PandaController:
     def __init__(self):
-        self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
+        
 
         self.data_queue = Queue(maxsize=1)
 
         self.panda = PandaArm()
         self.gripper = self.panda.get_gripper()
-        self.panda.untuck()
         self.gripper.open()
+        self.panda.untuck()
+
+        self.bins = {
+            'paper': np.array([-0.377553, -0.517819, 0]),
+            'glass': np.array([-0.377553, 0.517819, 0])
+        }
         
         self.is_processing = threading.Event()
         self.is_processing.set()
         self.processing_thread = threading.Thread(target=self._process)
 
+        self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
         self.processing_thread.start()
 
 
@@ -39,7 +55,7 @@ class PandaController:
             pass # Don't do anything we skip these detections.
 
     def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
-        target_pos[-1] += 0.1
+        target_pos[-1] += 0.11
 
         intermediate_pose = target_pos.copy()
         intermediate_pose[-1] += 0.2
@@ -47,26 +63,55 @@ class PandaController:
         ret, int_joints = self.panda.inverse_kinematics(intermediate_pose, target_quat)
         if ret or True:
             self.panda.move_to_joint_position(int_joints)
-
-        rospy.sleep(1)
         
+        target_pos[0] += 0.01
         ret, tgt_joints = self.panda.inverse_kinematics(target_pos, target_quat)
         if ret or True:
             self.panda.move_to_joint_position(tgt_joints)
         
-        rospy.sleep(1)
+        rospy.sleep(0.01)
 
-        object_width = 0.05
-        grasp_force = 20.0   
+        object_width = 0.05 
+        grasp_force = 10.0
         grasp_speed = 0.05
 
-        success = self.gripper.grasp(width=object_width - 0.01, force=grasp_force, speed=grasp_speed)
+        success = self.gripper.grasp(width=object_width - 0.005, force=grasp_force, speed=grasp_speed)
         if success:
             print("Oggetto afferrato con successo!")
         else:
             print("Impossibile afferrare l'oggetto.")
 
+        rospy.sleep(0.01)
+
+    def release_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
+        
+        self.panda.untuck()
+        
+        # target_pos[-1] = intermediate_pos[-1]
+        # ret, tgt_joints = self.panda.inverse_kinematics(target_pos, ee_rot)
+        # if ret or True:
+        #     self.panda.move_to_joint_position(tgt_joints)
+        current_pose, _ = self.panda.ee_pose()
+        angle_z = calculate_rotation(current_pose, target_pos)
+        a = self.panda.angles() * 0
+        a[0] = angle_z 
+        self.panda.move_to_joint_pos_delta(a)
+
+        angles = self.panda.angles()
+        ee_pos, ee_rot = self.panda.forward_kinematics(angles)
+        target_pos[2] = ee_pos[2]
+        ret, tgt_joints = self.panda.inverse_kinematics(target_pos, ee_rot)
+        if ret or True:
+            self.panda.move_to_joint_position(tgt_joints)
+
+        self.gripper.open()
+
+        self.panda.move_to_joint_position(angles)
+        self.panda.untuck()
+
         rospy.sleep(1)
+
+        x = 4
     
     def _process(self):
         while not rospy.is_shutdown() and self.is_processing.is_set():
@@ -94,7 +139,9 @@ class PandaController:
                 # Do all the task here
                 self.grasp_task(positions[i], orients[i])
 
-                self.panda.untuck()
+                bin_key = 'paper' if i%2 == 0 else 'glass'
+                tgt_bin = self.bins[bin_key]
+                self.release_task(tgt_bin)
 
             # Clean the queue from old predictions
             if self.data_queue.full():

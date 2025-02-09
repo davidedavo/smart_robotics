@@ -120,9 +120,10 @@ class KinectController:
         self.processing_thread.start()
                 
                 
-    def stop_processing(self) -> None:
+    def stop_processing(self, *args, **kwargs) -> None:
         self.is_processing.clear()
         self.processing_thread.join()
+        exit()
 
     
     def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
@@ -131,11 +132,11 @@ class KinectController:
         p_screen = np.ones((B, 3), dtype=np.float32)
         p_screen[:, :2] = bboxes[:, :2].astype(np.float32)
         
-        depth_center = depth_image[y_center, x_center]
-        depth_table = depth_image[281, 310] # TODO: Automize this
+        depth_center = depth_image[y_center, x_center][..., None]
+        depth_table = depth_image[281, 310].repeat(B)[..., None] # TODO: Automize this
         mid_depth = (depth_table + depth_center) / 2
 
-        p_cam = p_screen @ np.linalg.inv(self.K).T 
+        p_cam = p_screen @ np.linalg.inv(self.K).T
         p_cam *= mid_depth
 
         p_cam_hom = np.concatenate([p_cam, np.ones((p_cam.shape[0], 1), dtype=np.float32)], axis=-1)

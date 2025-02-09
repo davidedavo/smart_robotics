@@ -14,10 +14,21 @@ class ObjectDetector(ABC):
 
 class HardCodedObjectDetector(ObjectDetector):
     def detect_box(self, rgb_image) -> np.ndarray:
-        x0 = 211
-        y0 = 198
-        w = 28
-        h = 28
+        # cube
+        x0 = 196
+        y0 = 192
+        w = 32
+        h = 32
         xc = x0 + w/2
         yc = y0 + h/2
-        return np.array([[xc, yc, w, h]], dtype=np.int32)
+        bboxes=[[xc, yc, w, h]]
+
+        # cylinder
+        x0 = 333
+        y0 = 189
+        w = 38
+        h = 39
+        xc = x0 + w/2
+        yc = y0 + h/2
+        bboxes += [[xc, yc, w, h]]
+        return np.array(bboxes, dtype=np.int32)

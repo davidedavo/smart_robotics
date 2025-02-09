@@ -9,7 +9,7 @@
       <uri>model://sun</uri>
     </include>
 
-    <model name='table_marble'>
+    <!-- <model name='table_marble'>
       <static>1</static>
       <pose>0.508074 0.051791 0.257791 0 -0 1.570796</pose>
       <link name='link'>
@@ -26,12 +26,12 @@
               <ode/>
             </contact>
             <bounce>
-              <restitution_coefficient>0.1</restitution_coefficient> <!-- Riduci il valore per meno rimbalzo -->
+              <restitution_coefficient>0.1</restitution_coefficient>
               <threshold>10.0</threshold>
             </bounce>
             <friction>
               <ode>
-                <mu>1.0</mu>  <!-- Valore standard per un tavolo normale -->
+                <mu>1.0</mu>
                 <mu2>0.8</mu2> 
               </ode>
             </friction>
@@ -57,10 +57,10 @@
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-    </model>
+    </model> -->
 
-    <!-- <model name='unit_cylinder'>
-      <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
+    <model name='unit_cylinder'>
+      <pose>0.45645 0.107404 0 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='link'>
       <inertial>
@@ -76,8 +76,8 @@
           <surface>
             <friction>
               <ode>
-                <mu>2.0</mu>
-                <mu2>1.5</mu2>
+                <mu>10</mu>
+                <mu2>10</mu2>
                 <slip1>0.0</slip1> 
                 <slip2>0.0</slip2>
               </ode>
@@ -101,19 +101,36 @@
               <uri>file://media/materials/scripts/gazebo.material</uri>
             </script>
           </material>
+          <cast_shadows>false</cast_shadows>
         </visual>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>
         <kinematic>0</kinematic>
       </link>
-    </model> -->
+    </model>
+
+    <include>
+      <uri>
+        https://fuel.gazebosim.org/1.0/OpenRobotics/models/TrashBin
+      </uri>
+      <name>trash1</name>
+      <pose>-0.377553 -0.517819 0 0 0 0</pose>
+    </include>
+
+    <include>
+      <uri>
+        https://fuel.gazebosim.org/1.0/OpenRobotics/models/TrashBin
+      </uri>
+      <name>trash2</name>
+      <pose>-0.377553 0.517819 0 0 0 0</pose>
+    </include>
 
     <model name='unit_box'>
-      <pose>0.45645 -0.107404 0.426083 0 -0 0</pose>
+      <pose>0.45645 -0.107404 0 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='box_link'>
       <inertial>
-        <mass>0.01</mass>
+        <mass>0.05</mass>
       </inertial>
         <collision name='collision'>
           <geometry>
@@ -148,6 +165,7 @@
               <uri>file://media/materials/scripts/gazebo.material</uri>
             </script>
           </material>
+          <cast_shadows>false</cast_shadows>
         </visual>
         <self_collide>0</self_collide>
         <enable_wind>0</enable_wind>

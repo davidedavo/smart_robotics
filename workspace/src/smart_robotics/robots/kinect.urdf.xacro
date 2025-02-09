@@ -37,7 +37,7 @@
         <sensor name='camera' type='depth'>
           <update_rate>1</update_rate>
           <camera>
-            <horizontal_fov>1.0472</horizontal_fov>
+            <horizontal_fov>0.698131701</horizontal_fov> <!--40 degrees--> 
             <image>
               <width>640</width>
               <height>480</height>
