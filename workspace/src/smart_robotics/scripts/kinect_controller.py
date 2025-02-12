@@ -15,7 +15,7 @@ import tf.transformations as tft
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
 from custom_msg.msg import PosesWithScales
-from smart_robotics.scripts.object_detection import HardCodedObjectDetector
+from smart_robotics.scripts.object_detection import HardCodedObjectDetector, TemplateMatchingObjectDetector, SIFTObjectDetector
 
 class KinectController:
         
@@ -71,6 +71,8 @@ class KinectController:
         self.processing_thread = threading.Thread(target=self._process)
         self.is_processing = threading.Event()
 
+        #self.object_detector = TemplateMatchingObjectDetector("template.jpg")  # Per il template matching
+        #self.object_detector = SIFTObjectDetector("template.jpg")  # Per il detector SIFT
         self.object_detector = HardCodedObjectDetector()
         self.publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
 
