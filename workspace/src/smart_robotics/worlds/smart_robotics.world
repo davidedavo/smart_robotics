@@ -157,9 +157,9 @@
       <pose>0.45645 -0.107404 0 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='box_link'>
-      <inertial>
-        <mass>0.05</mass>
-      </inertial>
+        <inertial>
+          <mass>0.05</mass>
+        </inertial>
         <collision name='collision'>
           <geometry>
             <box>
@@ -169,8 +169,8 @@
           <surface>
             <friction>
               <ode>
-                <mu>2.0</mu>  
-                <mu2>1.5</mu2> 
+                <mu>2.0</mu>
+                <mu2>1.5</mu2>
                 <slip1>0.0</slip1>
                 <slip2>0.0</slip2>
               </ode>
