@@ -125,7 +125,7 @@
       <pose>-0.377553 0.517819 0 0 0 0</pose>
     </include>
 
-    <model name='unit_box'>
+    <!-- <model name='unit_box'>
       <pose>0.45645 -0.107404 0 0 -0 0</pose>
       <scale>0.05 0.05 0.05</scale>
       <link name='box_link'>
@@ -143,6 +143,150 @@
               <ode>
                 <mu>2.0</mu>  
                 <mu2>1.5</mu2> 
+                <slip1>0.0</slip1>
+                <slip2>0.0</slip2>
+              </ode>
+            </friction>
+            <bounce>
+              <restitution_coefficient>0.05</restitution_coefficient>
+              <threshold>10.0</threshold>
+            </bounce>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+            </script>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model> -->
+    
+    <model name='unit_box_1'>
+      <pose>0.45645 0.207404 0 0 -0 0</pose>  <!-- Spostato lungo l'asse X -->
+      <scale>0.05 0.05 0.05</scale>
+      <link name='box_link'>
+        <inertial>
+          <mass>0.05</mass>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>2.0</mu>
+                <mu2>1.5</mu2>
+                <slip1>0.0</slip1>
+                <slip2>0.0</slip2>
+              </ode>
+            </friction>
+            <bounce>
+              <restitution_coefficient>0.05</restitution_coefficient>
+              <threshold>10.0</threshold>
+            </bounce>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+            </script>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model>
+
+    <model name='unit_box_2'>
+      <pose>0.45645 -0.107404 0 0 -0 0.5</pose> <!-- Spostato lungo l'asse Z -->
+      <scale>0.05 0.05 0.05</scale>
+      <link name='box_link'>
+        <inertial>
+          <mass>0.05</mass>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>2.0</mu>
+                <mu2>1.5</mu2>
+                <slip1>0.0</slip1>
+                <slip2>0.0</slip2>
+              </ode>
+            </friction>
+            <bounce>
+              <restitution_coefficient>0.05</restitution_coefficient>
+              <threshold>10.0</threshold>
+            </bounce>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <script>
+              <name>Gazebo/Red</name>
+              <uri>file://media/materials/scripts/gazebo.material</uri>
+            </script>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <self_collide>0</self_collide>
+        <enable_wind>0</enable_wind>
+        <kinematic>0</kinematic>
+      </link>
+    </model>
+
+    <model name='unit_box_3'>
+      <pose>0.45645 -0.207404 0 0 -0 0</pose>  <!-- Spostato lungo l'asse Y -->
+      <scale>0.05 0.05 0.05</scale>
+      <link name='box_link'>
+        <inertial>
+          <mass>0.05</mass>
+        </inertial>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.05 0.05 0.05</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>2.0</mu>
+                <mu2>1.5</mu2>
                 <slip1>0.0</slip1>
                 <slip2>0.0</slip2>
               </ode>
