@@ -1,3 +1,6 @@
 [submodule "workspace/src/panda_simulator"]
 	path = workspace/src/panda_simulator
 	url = https://github.com/justagist/panda_simulator.git
+[submodule "workspace/src/gazebo-conveyor"]
+	path = workspace/src/gazebo-conveyor
+	url = https://github.com/rokokoo/gazebo-conveyor.git
