@@ -68,8 +68,8 @@ class KinectController:
 
         self._images_lock = threading.Lock()
 
-        self.processing_thread = threading.Thread(target=self._process)
-        self.is_processing = threading.Event()
+        # self.processing_thread = threading.Thread(target=self._process)
+        # self.is_processing = threading.Event()
 
         self.object_detector = HardCodedObjectDetector()
         self.publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
@@ -115,15 +115,15 @@ class KinectController:
         self.set_rgbd(rgb_image, depth_image)
 
     
-    def start_processing(self, *args, **kwrags) -> None:
-        self.is_processing.set()
-        self.processing_thread.start()
+    # def start_processing(self, *args, **kwrags) -> None:
+    #     self.is_processing.set()
+    #     # self.processing_thread.start()
                 
                 
-    def stop_processing(self, *args, **kwargs) -> None:
-        self.is_processing.clear()
-        self.processing_thread.join()
-        exit()
+    # def stop_processing(self, *args, **kwargs) -> None:
+    #     self.is_processing.clear()
+    #     # self.processing_thread.join()
+    #     exit()
 
     
     def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
@@ -149,8 +149,8 @@ class KinectController:
         return p_world[:, :3], orientations, scales
 
 
-    def _process(self):
-        while not rospy.is_shutdown() and self.is_processing.is_set():
+    def process(self):
+        while not rospy.is_shutdown():# and self.is_processing.is_set():
             
             rgb, depth = self.get_rgbd()
             
@@ -170,7 +170,6 @@ class KinectController:
                 continue
 
             try:
-                # Create a list of poses
                 msg_poses = []
                 msg_scales = []
                 for i in range(N_dets):
@@ -198,9 +197,10 @@ if __name__ == '__main__':
     rospy.init_node("kinect_controller", log_level=rospy.WARN)
 
     kinect_controller = KinectController()
-    kinect_controller.start_processing()
+    # kinect_controller.start_processing()
 
-    signal.signal(signal.SIGINT, kinect_controller.stop_processing)
+    # signal.signal(signal.SIGINT, kinect_controller.stop_processing)
 
-    while not rospy.is_shutdown():
-        rospy.spin()
+    kinect_controller.process()
+    # while not rospy.is_shutdown():
+    #     rospy.spin()

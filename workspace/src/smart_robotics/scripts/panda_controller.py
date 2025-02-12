@@ -36,12 +36,12 @@ class PandaController:
             'glass': np.array([-0.377553, 0.517819, 0])
         }
         
-        self.is_processing = threading.Event()
-        self.is_processing.set()
-        self.processing_thread = threading.Thread(target=self._process)
+        # self.is_processing = threading.Event()
+        # self.is_processing.set()
+        # self.processing_thread = threading.Thread(target=self._process)
 
         self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
-        self.processing_thread.start()
+        # self.processing_thread.start()
 
 
     def poses_callback(self, msg):
@@ -113,8 +113,8 @@ class PandaController:
 
         x = 4
     
-    def _process(self):
-        while not rospy.is_shutdown() and self.is_processing.is_set():
+    def process(self):
+        while not rospy.is_shutdown():
             if self.data_queue.empty():
                 sleep(0.01)
                 continue
@@ -157,5 +157,6 @@ if __name__ == '__main__':
 
     # signal.signal(signal.SIGINT, panda_controller.stop_processing)
 
-    while not rospy.is_shutdown():
-        rospy.spin()
+    panda_controller.process()
+    # while not rospy.is_shutdown():
+    #     rospy.spin()
