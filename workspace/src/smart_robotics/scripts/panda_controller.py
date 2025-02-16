@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import math
 from multiprocessing import Queue
 from queue import Full
@@ -9,6 +11,7 @@ import numpy as np
 import rospy
 from panda_robot import PandaArm
 from custom_msg.msg import PosesWithScales
+from custom_msg.srv import PickObject, PickObjectResponse
 
 
 def calculate_rotation(start, target):
@@ -24,7 +27,7 @@ class PandaController:
     def __init__(self):
         
 
-        self.data_queue = Queue(maxsize=1)
+        self.data_queue = Queue(maxsize=100)
 
         self.panda = PandaArm()
         self.gripper = self.panda.get_gripper()
@@ -40,19 +43,20 @@ class PandaController:
         # self.is_processing.set()
         # self.processing_thread = threading.Thread(target=self._process)
 
-        self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
+        self.pick_and_place_service = rospy.Service('/panda/pick_and_place', PickObject, self.handle_pick_place_service)
+        # self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
         # self.processing_thread.start()
 
-
-    def poses_callback(self, msg):
-        pos = np.array([[pose.position.x, pose.position.y, pose.position.z] for pose in msg.poses])
-        orientations = np.array([[pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z] for pose in msg.poses])
-        scales = np.array([[scale.x, scale.y, scale.z] for scale in msg.scales])
-
+    def handle_pick_place_service(self, req):
+        pos = np.array([req.pose.position.x, req.pose.position.y, req.pose.position.z])
+        orientation = np.array([req.pose.orientation.w, req.pose.orientation.x, req.pose.orientation.y, req.pose.orientation.z])
+        scale = np.array([req.scale.x, req.scale.y, req.scale.z])
         if not self.data_queue.full():
-            self.data_queue.put({'pos': pos, 'orients': orientations, 'scales': scales}, block=False, timeout=0.01)
+            self.data_queue.put({'pos': pos, 'orient': orientation, 'scale': scale}, block=False, timeout=0.01)
         else:
             pass # Don't do anything we skip these detections.
+        return True
+    
 
     def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
         target_pos[-1] += 0.11
@@ -125,27 +129,20 @@ class PandaController:
                 sleep(0.01)
                 continue
 
-            positions = data['pos']
-            scales = data['scales']
-            orients = data['orients']
-            N_dets = positions.shape[0]
-            if N_dets == 0:
-                sleep(0.01)
-                continue
+            position = data['pos']
+            scale = data['scale']
+            orient = data['orient']
                 
-            assert N_dets == scales.shape[0] == orients.shape[0], 'Shapes not consisntents.'
+            # Do all the task here
+            self.grasp_task(position, orient)
 
-            for i in range(N_dets):
-                # Do all the task here
-                self.grasp_task(positions[i], orients[i])
+            bin_key = 'paper' if 0%2 == 0 else 'glass'
+            tgt_bin = self.bins[bin_key]
+            self.release_task(tgt_bin)
 
-                bin_key = 'paper' if i%2 == 0 else 'glass'
-                tgt_bin = self.bins[bin_key]
-                self.release_task(tgt_bin)
-
-            # Clean the queue from old predictions
-            if self.data_queue.full():
-                self.data_queue.get(block=False)
+            # # Clean the queue from old predictions
+            # if self.data_queue.full():
+            #     self.data_queue.get(block=False)
 
         
 

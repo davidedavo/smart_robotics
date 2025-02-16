@@ -111,6 +111,7 @@
   
   <node pkg="smart_robotics" type="kinect_controller.py" name="kinect_controller" output="screen" />
   <node pkg="smart_robotics" type="spawner_controller.py" name="spawner_controller" output="screen" />
+  <node pkg="smart_robotics" type="panda_controller.py" name="panda_controller" output="screen" />
   <!-- </group> -->
   
   <group ns="conveyor">

@@ -8,18 +8,25 @@ import numpy as np
 import rospy
 from gazebo_conveyor.srv import ConveyorBeltControl
 from custom_msg.msg import PosesWithScales
-from custom_msg.srv import SpawnObject, SpawnObjectResponse
+from custom_msg.srv import SpawnObject, SpawnObjectResponse, PickObject
+from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
 
 
 class FactoryController:
     def __init__(self):
         rospy.wait_for_service('/conveyor/control')
         rospy.wait_for_service('/spawner/spawn_objects')
+        rospy.wait_for_service('/spawner/spawn_objects')
+        rospy.wait_for_service('/panda/pick_and_place')
         self.conveyor_control = rospy.ServiceProxy('/conveyor/control', ConveyorBeltControl)
         self.spawn_service = rospy.ServiceProxy('/spawner/spawn_objects', SpawnObject)
+        self.pick_place_server = rospy.ServiceProxy('/panda/pick_and_place', PickObject)
         
         self.data_queue = Queue(maxsize=1)
         self.data_lock = threading.Lock()
+        self.is_picking = threading.Event()
+
+        self.rate = rospy.Rate(30)
         
         self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
         self.start_factory()
@@ -32,13 +39,10 @@ class FactoryController:
         scales = np.array([[scale.x, scale.y, scale.z] for scale in msg.scales])
 
         with self.data_lock:
-            try:
-                if self.data_queue.full():
-                    self.data_queue.get(block=False, timeout=0.01)
-                self.data_queue.put({'pos': pos, 'orients': orientations, 'scales': scales}, block=False, timeout=0.01)
-            except Exception as e:
-                x = 4
-
+            if self.data_queue.full():
+                self.data_queue.get(block=False, timeout=0.01)
+            self.data_queue.put({'pos': pos, 'orients': orientations, 'scales': scales}, block=False, timeout=0.01)
+ 
     
     def start_factory(self):
         self.conveyor_control(power=10.0)
@@ -53,7 +57,16 @@ class FactoryController:
         self.conveyor_control.close()
         self.spawn_service.close()
 
-        
+    def send_pick_and_place_req(self, position, orient, scale):
+        px, py, pz = position[0], position[1], position[2]
+        qw, qx, qy, qz = orient[0], orient[1], orient[2], orient[3]
+        sx, sy, sz = scale[0], scale[1], scale[2]
+
+        pose = Pose(position=Point(px, py, pz), orientation=Quaternion(qx, qy, qz, qw))
+        scale = Vector3(sx, sy, sz)
+        self.pick_place_server(pose=pose, scale=scale)
+
+
     def process(self):
         while not rospy.is_shutdown():            
             data = None
@@ -61,16 +74,16 @@ class FactoryController:
                 if not self.data_queue.empty():
                     data = self.data_queue.get(block=False)
             
-            if data is None:
-                sleep(0.01)
+            if self.is_picking.is_set() or data is None:
+                self.rate.sleep()
                 continue
-
+            
             positions = data['pos']
             scales = data['scales']
             orients = data['orients']
             N_dets = positions.shape[0]
             if N_dets == 0:
-                sleep(0.01)
+                self.rate.sleep()
                 continue
                 
             assert N_dets == scales.shape[0] == orients.shape[0], 'Shapes not consisntents.'
@@ -81,8 +94,15 @@ class FactoryController:
             print(positions)
 
             if is_pick_position.any():
+                self.is_picking.set()
                 self.stop_factory()
+                pick_pos = positions[is_pick_position][0]
+                pick_scale = scales[is_pick_position][0]
+                pick_orient = orients[is_pick_position][0]
+                self.send_pick_and_place_req(pick_pos, pick_orient, pick_scale)
                 pass
+
+            self.rate.sleep()
 
 
 
