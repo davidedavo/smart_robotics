@@ -108,13 +108,19 @@
   <!-- <node name="camera_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" /> -->
   <node name="camera_description" pkg="gazebo_ros" type="spawn_model" args="-param camera_description -sdf -model kinect"/>
   <node pkg="tf" type="static_transform_publisher" name="world_to_camera" args="$(arg kinect_xyz) $(arg kinect_rpy) world camera_link 100" />
+  
+  <node pkg="smart_robotics" type="kinect_controller.py" name="kinect_controller" output="screen" />
+  <node pkg="smart_robotics" type="spawner_controller.py" name="spawner_controller" output="screen" />
   <!-- </group> -->
   
   <group ns="conveyor">
 		<node name="spawn_model_belt" pkg="gazebo_ros" type="spawn_model" args="-file $(find smart_robotics)/urdf/conveyor.urdf -urdf -model conveyor_belt -x 0.5 -y 0 -z 0" output="screen" />
 	</group>
 
-  
+
+  <node pkg="image_view" type="image_view" name="image_view" output="screen">
+    <remap from="image" to="/kinect_controller/detected_images"/>
+  </node>
   
   <!-- <node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
     args="-d $(find smart_robotics)/config/demo.rviz" output="screen">

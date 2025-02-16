@@ -1,12 +1,12 @@
+#!/usr/bin/env python
 
 import threading
 import rospy, tf, rospkg, random
 from gazebo_msgs.srv import DeleteModel, SpawnModel, GetModelState
 from geometry_msgs.msg import Quaternion, Pose, Point
-from std_srvs.srv import Empty
+from custom_msg.srv import SpawnObject, SpawnObjectResponse
 
 class ObjectSpawnerController():
-    
     def __init__(self) -> None:
         self.rospack = rospkg.RosPack()
         self.path = self.rospack.get_path('smart_robotics')+"/urdf/"
@@ -17,10 +17,22 @@ class ObjectSpawnerController():
         
         self.is_spawning = threading.Event()
         self.rate = rospy.Rate(0.3)
+
+        self.spawn_service = rospy.Service('/spawner/spawn_objects', SpawnObject, self.handle_spawn_service)
         
         self.sm = rospy.ServiceProxy("/gazebo/spawn_urdf_model", SpawnModel)
         self.dm = rospy.ServiceProxy("/gazebo/delete_model", DeleteModel)
         self.ms = rospy.ServiceProxy("/gazebo/get_model_state", GetModelState)
+
+
+    def handle_spawn_service(self, req):
+        if req.spawn:
+            rospy.loginfo("Start spawning objects.")
+            self.is_spawning.set()
+        else:
+            rospy.loginfo("Stop spawning objects.")
+            self.is_spawning.clear()
+        return SpawnObjectResponse(True)
 
 
     def checkModel(self):
@@ -51,13 +63,16 @@ class ObjectSpawnerController():
         rospy.sleep(1)
 
     def shutdown_hook(self):
+        # TODO: Need to delete all models
         self.deleteModel()
         print("Shutting down")
 
 
     def process(self):
         while not rospy.is_shutdown():
-            self.spawnModel()
+            if self.is_spawning.is_set():
+                self.spawnModel()
+                # self.is_spawning.clear()
             self.rate.sleep()
 
 from gazebo_conveyor.srv import ConveyorBeltControl
@@ -67,13 +82,8 @@ if __name__ == '__main__':
     rospy.wait_for_service("/gazebo/delete_model")
     rospy.wait_for_service("/gazebo/spawn_urdf_model")
     rospy.wait_for_service("/gazebo/get_model_state")
-    rospy.wait_for_service('/conveyor/control')
-
-    conveyor_control = rospy.ServiceProxy('/conveyor/control', ConveyorBeltControl) # This will be moved in another file
-    response = conveyor_control(power=15.0)
-
-    rospy.on_shutdown(conveyor_control.close) # Need to call delete model
 
     spawner_controller = ObjectSpawnerController()
+    rospy.on_shutdown(spawner_controller.shutdown_hook) 
     spawner_controller.process()
     

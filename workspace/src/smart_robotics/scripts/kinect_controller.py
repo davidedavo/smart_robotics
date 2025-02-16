@@ -51,14 +51,10 @@ class KinectController:
             [0., 0., 0., 1.],
         ])  
         self.c2w = link_to_world @ kin_to_link
-        
-        # Synchronize the topics
-        self.images_ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=1, slop=0.1)
-        self.images_ts.registerCallback(self.images_callback)
 
-        self.kinect_images_dir = Path('./kinect/images')
+        self.kinect_images_dir = Path('/workspace/kinect/images')
         self.kinect_images_dir.mkdir(exist_ok=True, parents=True)
-        self.kinect_depth_dir = Path('./kinect/depths')
+        self.kinect_depth_dir = Path('/workspace/kinect/depths')
         self.kinect_depth_dir.mkdir(exist_ok=True, parents=True)
 
         # Do not access following attributes directly. Use the setter and getter.
@@ -68,12 +64,19 @@ class KinectController:
 
         self._images_lock = threading.Lock()
 
+        self.rate = rospy.Rate(30)
+
         # self.processing_thread = threading.Thread(target=self._process)
         # self.is_processing = threading.Event()
 
         self.object_detector = ContourObjectDetector("./templates/template.png")
         #self.object_detector = HardCodedObjectDetector()
-        self.publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
+        self.det_publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
+        self.image_publisher = rospy.Publisher('/kinect_controller/detected_images', Image, queue_size=1)
+
+        # Synchronize the topics
+        self.images_ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=1, slop=0.1)
+        self.images_ts.registerCallback(self.images_callback)
 
 
     def set_rgbd(self, rgb, depth):
@@ -107,11 +110,12 @@ class KinectController:
             rospy.logerr(e)
 
         # store images on filesystem
-        img_path = self.kinect_images_dir / f'{self.timestep:06d}.png'
-        depth_path = self.kinect_depth_dir / f'{self.timestep:06d}.png'
-        cv2.imwrite(img_path.as_posix(), (rgb_image[..., ::-1]*255).astype(np.uint8))
-        depth_image_u16 = (depth_image * 1000).astype(np.uint16)
-        cv2.imwrite(depth_path.as_posix(), depth_image_u16)
+        if False:
+            img_path = self.kinect_images_dir / f'{self.timestep:06d}.png'
+            depth_path = self.kinect_depth_dir / f'{self.timestep:06d}.png'
+            cv2.imwrite(img_path.as_posix(), (rgb_image[..., ::-1]*255).astype(np.uint8))
+            depth_image_u16 = (depth_image * 1000).astype(np.uint16)
+            cv2.imwrite(depth_path.as_posix(), depth_image_u16)
 
         self.set_rgbd(rgb_image, depth_image)
 
@@ -129,6 +133,8 @@ class KinectController:
     
     def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
         B = bboxes.shape[0]
+        if B == 0:
+            return None, None, None
         x_center, y_center = bboxes[:, 0], bboxes[:, 1]
         p_screen = np.ones((B, 3), dtype=np.float32)
         p_screen[:, :2] = bboxes[:, :2].astype(np.float32)
@@ -152,22 +158,39 @@ class KinectController:
 
     def process(self):
         while not rospy.is_shutdown():# and self.is_processing.is_set():
-            
             rgb, depth = self.get_rgbd()
             
             if self.K is None or rgb is None or depth is None:
-                sleep(0.1)
+                self.rate.sleep()
                 continue
             
             print(f'Processing timestep {self.timestep}')
 
             bboxes = self.object_detector.detect_box(rgb)
             positions, orientations, scales = self.compute_poses_scales(bboxes, depth)
+            
+            overlay = rgb.copy()
+            overlay = (overlay * 255).astype(np.uint8)
+            for i, bbox in enumerate(bboxes):
+                pos = positions[i]
+                xc, yc, w, h = bbox
+                x = xc - w // 2
+                y = yc - h // 2
+                overlay = cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                overlay = cv2.putText(overlay, str(pos), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+            ros_image = self.bridge.cv2_to_imgmsg(overlay, encoding="rgb8")
+
+            self.image_publisher.publish(ros_image)
+            
+            if positions is None:
+                self.rate.sleep()
+                continue
 
             assert positions.shape[0] == orientations.shape[0] == scales.shape[0], "Shapes not consisntents."
             N_dets = positions.shape[0]
             if N_dets == 0:
-                sleep(0.1)
+                self.rate.sleep()
                 continue
 
             try:
@@ -188,10 +211,12 @@ class KinectController:
                 pose_array.header.frame_id = 'world'
                 pose_array.poses = msg_poses
                 pose_array.scales = msg_scales
-                self.publisher.publish(pose_array)
+                self.det_publisher.publish(pose_array)
                 
             except Exception as e:
                 print(e)
+            
+            self.rate.sleep()
 
 
 if __name__ == '__main__':
