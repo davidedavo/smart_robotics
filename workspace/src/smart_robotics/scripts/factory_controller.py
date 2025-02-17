@@ -7,6 +7,7 @@ from time import sleep
 import numpy as np
 import rospy
 from gazebo_conveyor.srv import ConveyorBeltControl
+from std_msgs.msg import String
 from custom_msg.msg import PosesWithScales
 from custom_msg.srv import SpawnObject, SpawnObjectResponse, PickObject
 from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
@@ -29,6 +30,7 @@ class FactoryController:
         self.rate = rospy.Rate(30)
         
         self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
+        self.panda_status_subscriber = rospy.Subscriber('/panda/pick_status', String, self.panda_status_callback)
         self.start_factory()
 
     
@@ -42,10 +44,19 @@ class FactoryController:
             if self.data_queue.full():
                 self.data_queue.get(block=False, timeout=0.01)
             self.data_queue.put({'pos': pos, 'orients': orientations, 'scales': scales}, block=False, timeout=0.01)
+
+    def panda_status_callback(self, msg):
+        status = msg.data
+        print(status)
+        if status == 'releasing' and self.is_picking.is_set():
+            self.start_factory()
  
     
     def start_factory(self):
+        print('Starting Factory')
+        self.is_picking.clear()
         self.conveyor_control(power=10.0)
+        sleep(2)
         self.spawn_service(True)
 
     def stop_factory(self):
@@ -91,7 +102,7 @@ class FactoryController:
             distances = np.abs(positions[:, 1] - 0)
             is_pick_position =  distances < 1e-2
 
-            print(positions)
+            # print(positions)
 
             if is_pick_position.any():
                 self.is_picking.set()
@@ -100,7 +111,7 @@ class FactoryController:
                 pick_scale = scales[is_pick_position][0]
                 pick_orient = orients[is_pick_position][0]
                 self.send_pick_and_place_req(pick_pos, pick_orient, pick_scale)
-                pass
+                
 
             self.rate.sleep()
 

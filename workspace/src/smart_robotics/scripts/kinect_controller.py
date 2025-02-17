@@ -17,6 +17,19 @@ from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
 from custom_msg.msg import PosesWithScales
 from object_detection import HardCodedObjectDetector, ContourObjectDetector
 
+
+def backproject_points(points_2d:np.ndarray, depths:np.ndarray, K:np.ndarray, c2w:np.ndarray):
+    B = points_2d.shape[0]
+    points_2d = points_2d.astype(np.float32)
+    points_2d_hom = np.concatenate([points_2d, np.ones((B, 1)).astype(np.float32)], axis=-1)
+    p_cam = points_2d_hom @ np.linalg.inv(K).T
+    p_cam *= depths
+
+    p_cam_hom = np.concatenate([p_cam, np.ones((p_cam.shape[0], 1), dtype=np.float32)], axis=-1)
+    p_world = p_cam_hom @ c2w.T
+    return p_world[:, :3]
+
+
 class KinectController:
         
     def __init__(self):
@@ -136,24 +149,27 @@ class KinectController:
         if B == 0:
             return None, None, None
         x_center, y_center = bboxes[:, 0], bboxes[:, 1]
-        p_screen = np.ones((B, 3), dtype=np.float32)
-        p_screen[:, :2] = bboxes[:, :2].astype(np.float32)
-        
-        depth_center = depth_image[y_center, x_center][..., None]
+        depth_object = depth_image[y_center, x_center][..., None]
         depth_table = depth_image[281, 310].repeat(B)[..., None] # TODO: Automize this
-        mid_depth = (depth_table + depth_center) / 2
+        
+        mid_depth = (depth_table + depth_object) / 2
+        
+        p_center = bboxes[:, :2].copy().astype(np.float32)
+        p_left_top = p_center - bboxes[:, 2:4] / 2
+        p_right_bottom = p_center + bboxes[:, 2:4] / 2
 
-        p_cam = p_screen @ np.linalg.inv(self.K).T
-        p_cam *= mid_depth
-
-        p_cam_hom = np.concatenate([p_cam, np.ones((p_cam.shape[0], 1), dtype=np.float32)], axis=-1)
-        p_world = p_cam_hom @ self.c2w.T
+        # Points in world coordinate
+        p_center_w = backproject_points(p_center, mid_depth, self.K, self.c2w)
+        p_left_top_w = backproject_points(p_left_top, mid_depth, self.K, self.c2w)
+        p_right_bottom_w = backproject_points(p_right_bottom, mid_depth, self.K, self.c2w)
+        
+        scales = p_right_bottom_w - p_left_top_w
+        scales[:, [-1]] = depth_table - depth_object
 
         orientations = np.zeros((B, 4), dtype=np.float32)
         orientations[:, 0] = 1.
 
-        scales = np.ones((B, 4), dtype=np.float32) * 0.5
-        return p_world[:, :3], orientations, scales
+        return p_center_w, orientations, scales
 
 
     def process(self):

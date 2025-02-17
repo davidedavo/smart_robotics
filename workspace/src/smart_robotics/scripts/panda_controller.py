@@ -10,6 +10,7 @@ from time import sleep
 import numpy as np
 import rospy
 from panda_robot import PandaArm
+from std_msgs.msg import String
 from custom_msg.msg import PosesWithScales
 from custom_msg.srv import PickObject, PickObjectResponse
 
@@ -44,6 +45,8 @@ class PandaController:
         # self.processing_thread = threading.Thread(target=self._process)
 
         self.pick_and_place_service = rospy.Service('/panda/pick_and_place', PickObject, self.handle_pick_place_service)
+        self.status_publisher = rospy.Publisher('/panda/pick_status', String, queue_size=10) # ["idle", "grasping", "releasing"]
+        
         # self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
         # self.processing_thread.start()
 
@@ -59,6 +62,7 @@ class PandaController:
     
 
     def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
+        self.status_publisher.publish('grasping')
         target_pos[-1] += 0.11
 
         intermediate_pose = target_pos.copy()
@@ -90,6 +94,8 @@ class PandaController:
     def release_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
         
         self.panda.untuck()
+
+        self.status_publisher.publish('releasing')
         
         # target_pos[-1] = intermediate_pos[-1]
         # ret, tgt_joints = self.panda.inverse_kinematics(target_pos, ee_rot)
@@ -113,9 +119,8 @@ class PandaController:
         self.panda.move_to_joint_position(angles)
         self.panda.untuck()
 
-        rospy.sleep(1)
+        rospy.sleep(0.01)
 
-        x = 4
     
     def process(self):
         while not rospy.is_shutdown():
@@ -139,6 +144,7 @@ class PandaController:
             bin_key = 'paper' if 0%2 == 0 else 'glass'
             tgt_bin = self.bins[bin_key]
             self.release_task(tgt_bin)
+            self.status_publisher.publish('idle')
 
             # # Clean the queue from old predictions
             # if self.data_queue.full():
