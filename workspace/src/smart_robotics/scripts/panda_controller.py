@@ -61,7 +61,7 @@ class PandaController:
         return True
     
 
-    def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.])):
+    def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.]), target_scales=np.array([0.05, 0.05, 0.05])):
         self.status_publisher.publish('grasping')
         target_pos[-1] += 0.11
 
@@ -79,7 +79,7 @@ class PandaController:
         
         rospy.sleep(0.01)
 
-        object_width = 0.05 
+        object_width = target_scales[1]
         grasp_force = 10.0
         grasp_speed = 0.05
 
@@ -139,7 +139,7 @@ class PandaController:
             orient = data['orient']
                 
             # Do all the task here
-            self.grasp_task(position, orient)
+            self.grasp_task(position, orient, scale)
 
             bin_key = 'paper' if 0%2 == 0 else 'glass'
             tgt_bin = self.bins[bin_key]

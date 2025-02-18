@@ -10,8 +10,11 @@ class ObjectSpawnerController():
     def __init__(self) -> None:
         self.rospack = rospkg.RosPack()
         self.path = self.rospack.get_path('smart_robotics')+"/urdf/"
-        self.objects = []
-        self.objects.append(self.path+"red_cube.urdf")
+        self.objects = [
+            self.path+"red_cube.urdf",
+            self.path+"red_rectangle.urdf",
+            self.path+"red_cylinder.urdf"
+        ]
         self.col = 0        
         self.spawned_objects = []
         
@@ -44,7 +47,7 @@ class ObjectSpawnerController():
         return res.pose.position.z
 
     def spawnModel(self):
-        sampling_idx = 0 # TODO: get random object index
+        sampling_idx = random.randint(0, len(self.objects)-1)
         object = self.objects[sampling_idx]
         with open(object,"r") as f:
             object_urdf = f.read() #TODO: Make it parametrizable in terms of scale and color

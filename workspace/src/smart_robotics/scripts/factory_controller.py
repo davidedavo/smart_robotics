@@ -56,7 +56,7 @@ class FactoryController:
         print('Starting Factory')
         self.is_picking.clear()
         self.conveyor_control(power=10.0)
-        sleep(2)
+        sleep(4)
         self.spawn_service(True)
 
     def stop_factory(self):
