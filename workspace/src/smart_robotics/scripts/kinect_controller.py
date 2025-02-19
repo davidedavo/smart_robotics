@@ -171,9 +171,8 @@ class KinectController:
 
         return p_center_w, orientations, scales
 
-
     def process(self):
-        while not rospy.is_shutdown():# and self.is_processing.is_set():
+        while not rospy.is_shutdown():
             rgb, depth = self.get_rgbd()
             
             if self.K is None or rgb is None or depth is None:
@@ -182,28 +181,40 @@ class KinectController:
             
             print(f'Processing timestep {self.timestep}')
 
-            bboxes = self.object_detector.detect_box(rgb)
-            positions, orientations, scales = self.compute_poses_scales(bboxes, depth)
+            # Otteniamo le bbox e la lista dei flag (True se quadrato, False se non quadrato)
+            bboxes, is_square_flags = self.object_detector.detect_box(rgb)
             
+            # Disegna tutte le bbox sull'immagine (verde per quadrato, rosso per non quadrato)
             overlay = rgb.copy()
             overlay = (overlay * 255).astype(np.uint8)
             for i, bbox in enumerate(bboxes):
-                pos = positions[i]
                 xc, yc, w, h = bbox
-                x = xc - w // 2
-                y = yc - h // 2
-                overlay = cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                overlay = cv2.putText(overlay, str(pos), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
+                x = int(xc - w // 2)
+                y = int(yc - h // 2)
+                # Colore: verde se quadrato, rosso se non quadrato
+                color = (0, 255, 0) if is_square_flags[i] else (0, 0, 255)
+                overlay = cv2.rectangle(overlay, (x, y), (x + w, y + h), color, 2)
+                overlay = cv2.putText(overlay, str(bbox), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            
             ros_image = self.bridge.cv2_to_imgmsg(overlay, encoding="rgb8")
-
             self.image_publisher.publish(ros_image)
+            
+            # Filtra le bbox non quadrate (quelle con flag False)
+            filtered_bboxes = [bbox for bbox, flag in zip(bboxes, is_square_flags) if not flag]
+            if len(filtered_bboxes) == 0:
+                print("Nessun oggetto non quadrato rilevato.")
+                self.rate.sleep()
+                continue
+            filtered_bboxes = np.array(filtered_bboxes, dtype=np.int32)
+            
+            # Calcola posizioni, orientamenti e scale solo per le bbox non quadrate
+            positions, orientations, scales = self.compute_poses_scales(filtered_bboxes, depth)
             
             if positions is None:
                 self.rate.sleep()
                 continue
 
-            assert positions.shape[0] == orientations.shape[0] == scales.shape[0], "Shapes not consisntents."
+            assert positions.shape[0] == orientations.shape[0] == scales.shape[0], "Shapes non consistenti."
             N_dets = positions.shape[0]
             if N_dets == 0:
                 self.rate.sleep()
@@ -219,8 +230,8 @@ class KinectController:
 
                     pose = Pose(position=Point(px, py, pz), orientation=Quaternion(qx, qy, qz, qw))
                     scale = Vector3(sx, sy, sz)
-                    msg_poses += [pose]
-                    msg_scales += [scale]
+                    msg_poses.append(pose)
+                    msg_scales.append(scale)
 
                 pose_array = PosesWithScales()
                 pose_array.header.stamp = rospy.Time.now()
@@ -228,11 +239,12 @@ class KinectController:
                 pose_array.poses = msg_poses
                 pose_array.scales = msg_scales
                 self.det_publisher.publish(pose_array)
-                
+                    
             except Exception as e:
                 print(e)
             
             self.rate.sleep()
+
 
 
 if __name__ == '__main__':

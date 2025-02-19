@@ -62,7 +62,7 @@ class ContourObjectDetector(ObjectDetector):
         contours, _ = cv2.findContours(img_test_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         bboxes = []
 
-        for cnt in contours:
+        '''for cnt in contours:
             approx = cv2.approxPolyDP(cnt, 0.05 * cv2.arcLength(cnt, True), True)
             area = cv2.contourArea(cnt)
             x, y, w, h = cv2.boundingRect(cnt)
@@ -75,5 +75,56 @@ class ContourObjectDetector(ObjectDetector):
                 xc, yc = x + w // 2, y + h // 2
                 bboxes.append([xc, yc, w, h])
 
-        return np.array(bboxes, dtype=np.int32)
+        return np.array(bboxes, dtype=np.int32)'''
+
+        is_square_flags = []
+
+        for cnt in contours:
+            # Approssima il contorno per identificare la forma
+            approx = cv2.approxPolyDP(cnt, 0.02 * cv2.arcLength(cnt, True), True)
+            area = cv2.contourArea(cnt)
+            
+            # Calcola la bounding box del contorno
+            x, y, w, h = cv2.boundingRect(cnt)
+
+            # Calcola il cerchio minimo che contiene il contorno
+            (cx, cy), radius = cv2.minEnclosingCircle(cnt)
+            circle_area = np.pi * (radius ** 2)
+            
+            # Calcola la circularità
+            circularity = area / circle_area if circle_area != 0 else 0
+
+            # Inizializza il flag; di default lo impostiamo su False
+            is_square = False
+
+            # Verifica se il contorno ha 4 lati (forma poligonale) e valuta l'aspect ratio
+            if len(approx) == 4:
+                aspect_ratio = w / float(h)  # rapporto tra larghezza e altezza
+
+                if 0.9 <= aspect_ratio <= 1.1:  # Forma quasi quadrata
+                    print(f"Quadrato rilevato: {(x, y, w, h)}")
+                    #cv2.drawContours(img_test, [approx], -1, (0, 255, 0), 2)  # Disegna in verde
+                    is_square = True
+                else:
+                    print(f"Rettangolo rilevato: {(x, y, w, h)}")
+                    #cv2.drawContours(img_test, [approx], -1, (255, 255, 0), 2)  # Disegna in azzurro
+                    is_square = False
+
+                # Aggiungiamo la bbox trovata
+                bboxes.append([x + w // 2, y + h // 2, w, h])
+                is_square_flags.append(is_square)
+
+            # Se non ha 4 lati e la circularità è elevata, lo consideriamo un cilindro
+            elif circularity > 0.8:
+                print(f"Cilindro rilevato: {(x, y, w, h)}")
+                #cv2.drawContours(img_test, [approx], -1, (0, 0, 255), 2)  # Disegna in rosso
+                bboxes.append([x + w // 2, y + h // 2, w, h])
+                is_square_flags.append(False)  # Un cilindro non è un quadrato
+
+        # Se desideri visualizzare l'immagine con i disegni per debug, puoi usare:
+        # cv2.imshow("Contorni rilevati", img_test)
+        # cv2.waitKey(1)
+
+        # Ritorna le bbox come array numpy e la lista di flag
+        return np.array(bboxes, dtype=np.int32), is_square_flags
 
