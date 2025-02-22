@@ -1,5 +1,4 @@
+std_msgs/Header header
 geometry_msgs/Pose pose
 geometry_msgs/Vector3 scale
-geometry_msgs/Vector3 place_pos
----
-bool success
+int32 class_id

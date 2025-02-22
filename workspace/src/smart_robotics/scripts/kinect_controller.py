@@ -14,7 +14,7 @@ import tf
 import tf.transformations as tft
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
-from custom_msg.msg import PosesWithScales
+from custom_msg.msg import Detection3D
 from object_detection import HardCodedObjectDetector, ContourObjectDetector
 
 
@@ -71,9 +71,8 @@ class KinectController:
         self.kinect_depth_dir.mkdir(exist_ok=True, parents=True)
 
         # Do not access following attributes directly. Use the setter and getter.
-        self._rgb = None 
-        self._depth = None 
-        self._timestep = 0
+        self._next_timestep = 0
+        self.image_queue = Queue(maxsize=1)
 
         self._images_lock = threading.Lock()
 
@@ -84,28 +83,29 @@ class KinectController:
 
         self.object_detector = ContourObjectDetector("./templates/template.png")
         #self.object_detector = HardCodedObjectDetector()
-        self.det_publisher = rospy.Publisher('/kinect_controller/detected_poses', PosesWithScales, queue_size=1)
+        self.det_publisher = rospy.Publisher('/kinect_controller/detected_poses', Detection3D, queue_size=1)
         self.image_publisher = rospy.Publisher('/kinect_controller/detected_images', Image, queue_size=1)
 
         # Synchronize the topics
         self.images_ts = ApproximateTimeSynchronizer([self.rgb_sub, self.depth_sub], queue_size=1, slop=0.1)
         self.images_ts.registerCallback(self.images_callback)
-
-
-    def set_rgbd(self, rgb, depth):
-        with self._images_lock:
-            self._rgb = rgb
-            self._depth = depth
-            self._timestep += 1
-
-    def get_rgbd(self):
-        with self._images_lock:
-            return self._rgb, self._depth
         
-    @property
-    def timestep(self):
+
+
+    def set_image_data(self, rgb, depth):
         with self._images_lock:
-            return self._timestep
+            if self.image_queue.full():
+                self.image_queue.get(block=False)
+            self.image_queue.put({'rgb':rgb, 'depth': depth, 'timestep': self._next_timestep})
+            self._next_timestep += 1
+
+    def get_image_data(self):
+        data = None
+        with self._images_lock:
+            if not self.image_queue.empty():
+                data = self.image_queue.get()                
+        return data
+        
     
     def camera_info_callback(self, data):
         self.K = np.array(data.K).reshape(3, 3)  # Intrinsic camera matrix
@@ -130,7 +130,7 @@ class KinectController:
             depth_image_u16 = (depth_image * 1000).astype(np.uint16)
             cv2.imwrite(depth_path.as_posix(), depth_image_u16)
 
-        self.set_rgbd(rgb_image, depth_image)
+        self.set_image_data(rgb_image, depth_image)
 
     
     # def start_processing(self, *args, **kwrags) -> None:
@@ -143,14 +143,54 @@ class KinectController:
     #     # self.processing_thread.join()
     #     exit()
 
+    def is_in_area(self, bboxes, target_box):
+        if bboxes.shape[0] == 0:
+            return bboxes        
+        x_center, y_center = bboxes[:, 0], bboxes[:, 1]
+
+        xi_target = target_box[0, 0]  - target_box[0, 2] / 2
+        yi_target = target_box[0, 1]  - target_box[0, 3] / 2
+        xf_target = target_box[0, 0]  + target_box[0, 2] / 2
+        yf_target = target_box[0, 1]  + target_box[0, 3] / 2
+
+        centered_boxes = (x_center > xi_target) & (x_center < xf_target) & (y_center > yi_target) & (y_center < yf_target)
+        return centered_boxes
+        
+    def get_target_box(self, w, h, area_ratio=0.05):
+        x_c = w / 2
+        y_c = h / 2
+        
+        w = w*area_ratio
+        h = h*area_ratio
+        return np.array([[x_c, y_c, w, h]])
+    
+    def get_non_detection_pixels(self, image, bboxes, margin=20):
+        H, W = image.shape[:2]
+        mask = np.ones((H, W), dtype=bool)
+        
+        for bbox in bboxes:
+            xc, yc, w, h = bbox
+            x1 = max(int(xc - w / 2 - margin), 0)
+            y1 = max(int(yc - h / 2 - margin), 0)
+            x2 = min(int(xc + w / 2 + margin), W)
+            y2 = min(int(yc + h / 2 + margin), H)
+            mask[y1:y2, x1:x2] = False
+        
+        non_detection_pixels = image[mask]
+        return non_detection_pixels
     
     def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
+        if bboxes.ndim == 1:
+            bboxes = bboxes[None]
         B = bboxes.shape[0]
-        if B == 0:
-            return None, None, None
+        assert bboxes.shape == (B, 4)
         x_center, y_center = bboxes[:, 0], bboxes[:, 1]
         depth_object = depth_image[y_center, x_center][..., None]
-        depth_table = depth_image[281, 310].repeat(B)[..., None] # TODO: Automize this
+
+        non_detection_depths = self.get_non_detection_pixels(depth_image, bboxes)
+        depth_table = np.median(non_detection_depths).repeat(B)[..., None]
+
+        #depth_table = depth_image[281, 310].repeat(B)[..., None] # TODO: Automize this
         
         mid_depth = (depth_table + depth_object) / 2
         
@@ -173,41 +213,44 @@ class KinectController:
 
     def process(self):
         while not rospy.is_shutdown():
-            rgb, depth = self.get_rgbd()
+            data = self.get_image_data()
+            if data is None:
+                self.rate.sleep()
+                continue
+            
+            rgb, depth, timestep = data['rgb'], data['depth'], data['timestep']
             
             if self.K is None or rgb is None or depth is None:
                 self.rate.sleep()
                 continue
             
-            print(f'Processing timestep {self.timestep}')
+            rospy.loginfo(f'Processing timestep {timestep}')
 
             # Otteniamo le bbox e la lista dei flag (True se quadrato, False se non quadrato)
-            bboxes, is_square_flags = self.object_detector.detect_box(rgb)
-            
+            bboxes, classes_ids = self.object_detector.detect_box(rgb)
+            target_box = self.get_target_box(rgb.shape[1], rgb.shape[0])
+
             # Disegna tutte le bbox sull'immagine (verde per quadrato, rosso per non quadrato)
             overlay = rgb.copy()
             overlay = (overlay * 255).astype(np.uint8)
-            for i, bbox in enumerate(bboxes):
-                xc, yc, w, h = bbox
-                x = int(xc - w // 2)
-                y = int(yc - h // 2)
-                # Colore: verde se quadrato, rosso se non quadrato
-                color = (0, 255, 0) if is_square_flags[i] else (0, 0, 255)
-                overlay = cv2.rectangle(overlay, (x, y), (x + w, y + h), color, 2)
-                overlay = cv2.putText(overlay, str(bbox), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            overlay = draw_bboxes(overlay, bboxes, classes_ids)
+            overlay = draw_bboxes(overlay, target_box, [3])
             
             ros_image = self.bridge.cv2_to_imgmsg(overlay, encoding="rgb8")
             self.image_publisher.publish(ros_image)
             
             # Filtra le bbox non quadrate (quelle con flag False)
-            filtered_bboxes = [bbox for bbox, flag in zip(bboxes, is_square_flags) if not flag]
+            filtered_bboxes = []
+            if bboxes.shape[0] > 0:
+                mask = self.is_in_area(bboxes, target_box)
+                filtered_bboxes = bboxes[mask]
+                classes_ids = classes_ids[mask]
             if len(filtered_bboxes) == 0:
-                print("Nessun oggetto non quadrato rilevato.")
                 self.rate.sleep()
                 continue
-            filtered_bboxes = np.array(filtered_bboxes, dtype=np.int32)
-            
-            # Calcola posizioni, orientamenti e scale solo per le bbox non quadrate
+
+            filtered_bboxes = filtered_bboxes[[0]]
+            classes_ids = classes_ids[[0]]
             positions, orientations, scales = self.compute_poses_scales(filtered_bboxes, depth)
             
             if positions is None:
@@ -220,24 +263,27 @@ class KinectController:
                 self.rate.sleep()
                 continue
 
+            class_id = int(classes_ids[0])
+
             try:
-                msg_poses = []
-                msg_scales = []
-                for i in range(N_dets):
-                    px, py, pz = positions[i, 0], positions[i, 1], positions[i, 2]
-                    qw, qx, qy, qz = orientations[i, 0], orientations[i, 1], orientations[i, 2], orientations[i, 3]
-                    sx, sy, sz = scales[i, 0], scales[i, 1], scales[i, 2]
+                # msg_poses = []
+                # msg_scales = []
+                # we assume only one detection at time
+                px, py, pz = positions[0, 0], positions[0, 1], positions[0, 2]
+                qw, qx, qy, qz = orientations[0, 0], orientations[0, 1], orientations[0, 2], orientations[0, 3]
+                sx, sy, sz = scales[0, 0], scales[0, 1], scales[0, 2]
 
-                    pose = Pose(position=Point(px, py, pz), orientation=Quaternion(qx, qy, qz, qw))
-                    scale = Vector3(sx, sy, sz)
-                    msg_poses.append(pose)
-                    msg_scales.append(scale)
+                pose = Pose(position=Point(px, py, pz), orientation=Quaternion(qx, qy, qz, qw))
+                scale = Vector3(sx, sy, sz)
+                # msg_poses.append(pose)
+                # msg_scales.append(scale)
 
-                pose_array = PosesWithScales()
+                pose_array = Detection3D()
                 pose_array.header.stamp = rospy.Time.now()
                 pose_array.header.frame_id = 'world'
-                pose_array.poses = msg_poses
-                pose_array.scales = msg_scales
+                pose_array.pose = pose
+                pose_array.scale = scale
+                pose_array.class_id = class_id
                 self.det_publisher.publish(pose_array)
                     
             except Exception as e:
@@ -245,6 +291,25 @@ class KinectController:
             
             self.rate.sleep()
 
+
+COLORS = [
+    (255, 0, 255),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 0)
+]
+
+def draw_bboxes(image, bboxes, classes_ids):
+    for i, (bbox, class_id) in enumerate(zip(bboxes, classes_ids)):
+        xc, yc, w, h = bbox
+        x = int(xc - w // 2)
+        y = int(yc - h // 2)
+        w = int(w)
+        h = int(h)
+        color = COLORS[int(class_id)]
+        image = cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
+        image = cv2.putText(image, str(bbox), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    return image
 
 
 if __name__ == '__main__':

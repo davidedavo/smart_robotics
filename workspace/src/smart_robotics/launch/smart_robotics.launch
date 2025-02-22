@@ -109,9 +109,9 @@
   <node name="camera_description" pkg="gazebo_ros" type="spawn_model" args="-param camera_description -sdf -model kinect"/>
   <node pkg="tf" type="static_transform_publisher" name="world_to_camera" args="$(arg kinect_xyz) $(arg kinect_rpy) world camera_link 100" />
   
-  <node pkg="smart_robotics" type="kinect_controller.py" name="kinect_controller" output="screen" />
+  <node pkg="smart_robotics" type="kinect_controller.py" name="kinect_controller" />
   <node pkg="smart_robotics" type="spawner_controller.py" name="spawner_controller" output="screen" />
-  <node pkg="smart_robotics" type="panda_controller.py" name="panda_controller" output="screen" />
+  <node pkg="smart_robotics" type="panda_controller.py" name="panda_controller" />
   <node pkg="smart_robotics" type="factory_controller.py" name="factory_controller" output="screen" />
   <!-- </group> -->
   

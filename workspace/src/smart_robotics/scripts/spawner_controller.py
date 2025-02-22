@@ -19,6 +19,7 @@ class ObjectSpawnerController():
         self.spawned_objects = []
         
         self.is_spawning = threading.Event()
+        self.restart_spawning = threading.Event()
         self.rate = rospy.Rate(0.3)
 
         self.spawn_service = rospy.Service('/spawner/spawn_objects', SpawnObject, self.handle_spawn_service)

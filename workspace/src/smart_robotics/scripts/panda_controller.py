@@ -34,11 +34,6 @@ class PandaController:
         self.gripper = self.panda.get_gripper()
         self.gripper.open()
         self.panda.untuck()
-
-        self.bins = {
-            'paper': np.array([-0.377553, -0.517819, 0]),
-            'glass': np.array([-0.377553, 0.517819, 0])
-        }
         
         # self.is_processing = threading.Event()
         # self.is_processing.set()
@@ -51,11 +46,12 @@ class PandaController:
         # self.processing_thread.start()
 
     def handle_pick_place_service(self, req):
-        pos = np.array([req.pose.position.x, req.pose.position.y, req.pose.position.z])
+        pick_pos = np.array([req.pose.position.x, req.pose.position.y, req.pose.position.z])
         orientation = np.array([req.pose.orientation.w, req.pose.orientation.x, req.pose.orientation.y, req.pose.orientation.z])
         scale = np.array([req.scale.x, req.scale.y, req.scale.z])
+        release_pos = np.array([req.place_pos.x, req.place_pos.y, req.place_pos.z])
         if not self.data_queue.full():
-            self.data_queue.put({'pos': pos, 'orient': orientation, 'scale': scale}, block=False, timeout=0.01)
+            self.data_queue.put({'pick_pos': pick_pos, 'orient': orientation, 'scale': scale, 'release_pos': release_pos}, block=False, timeout=0.01)
         else:
             pass # Don't do anything we skip these detections.
         return True
@@ -134,16 +130,15 @@ class PandaController:
                 sleep(0.01)
                 continue
 
-            position = data['pos']
+            position = data['pick_pos']
             scale = data['scale']
             orient = data['orient']
+            release_position = data['release_pos']
                 
             # Do all the task here
             self.grasp_task(position, orient, scale)
 
-            bin_key = 'paper' if 0%2 == 0 else 'glass'
-            tgt_bin = self.bins[bin_key]
-            self.release_task(tgt_bin)
+            self.release_task(release_position)
             self.status_publisher.publish('idle')
 
             # # Clean the queue from old predictions
