@@ -77,9 +77,7 @@ class KinectController:
         self._images_lock = threading.Lock()
 
         self.rate = rospy.Rate(30)
-
-        # self.processing_thread = threading.Thread(target=self._process)
-        # self.is_processing = threading.Event()
+        
 
         self.object_detector = ContourObjectDetector("./templates/template.png")
         #self.object_detector = HardCodedObjectDetector()
@@ -199,7 +197,7 @@ class KinectController:
         p_right_bottom = p_center + bboxes[:, 2:4] / 2
 
         # Points in world coordinate
-        p_center_w = backproject_points(p_center, mid_depth, self.K, self.c2w)
+        p_center_w = backproject_points(p_center, depth_object, self.K, self.c2w)
         p_left_top_w = backproject_points(p_left_top, mid_depth, self.K, self.c2w)
         p_right_bottom_w = backproject_points(p_right_bottom, mid_depth, self.K, self.c2w)
         

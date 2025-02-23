@@ -59,7 +59,8 @@ class PandaController:
 
     def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.]), target_scales=np.array([0.05, 0.05, 0.05])):
         self.status_publisher.publish('grasping')
-        target_pos[-1] += 0.11
+        target_pos[-1] += 0.09
+        target_pos[0] += 0.01
 
         intermediate_pose = target_pos.copy()
         intermediate_pose[-1] += 0.2
@@ -68,7 +69,6 @@ class PandaController:
         if ret or True:
             self.panda.move_to_joint_position(int_joints)
         
-        target_pos[0] += 0.01
         ret, tgt_joints = self.panda.inverse_kinematics(target_pos, target_quat)
         if ret or True:
             self.panda.move_to_joint_position(tgt_joints)
