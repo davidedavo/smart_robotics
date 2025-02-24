@@ -53,11 +53,32 @@ class ObjectSpawnerController():
         with open(object,"r") as f:
             object_urdf = f.read() #TODO: Make it parametrizable in terms of scale and color
 
+
+        scale = round(random.uniform(0.6, 1.0), 2)  # Scala casuale --> 0.57 scivola
+        if "red_cube" in object_urdf:
+            new_size = 0.06 * scale
+            object_urdf = object_urdf.replace('<box size="0.06 0.06 0.06"/>',
+                                            f'<box size="{new_size} {new_size} {new_size}"/>')
+            
+        elif "red_rectangle" in object_urdf:
+            new_size_1 = 0.12 * scale
+            new_size_2 = 0.06 * scale
+            object_urdf = object_urdf.replace('<box size="0.12 0.06 0.06"/>',
+                                            f'<box size="{new_size_1} {new_size_2} {new_size_2}"/>')
+                
+        elif "red_cylinder" in object_urdf:
+            new_radius = 0.03 * scale
+            new_length = 0.1 * scale
+            object_urdf = object_urdf.replace('<cylinder radius="0.03" length="0.1"/>',
+                                            f'<cylinder radius="{new_radius}" length="{new_length}"/>')
+                
+
         spawn_idx = len(self.spawned_objects)
         quat = tf.transformations.quaternion_from_euler(0,0,0) #TODO: Give some randomness to rotation (in a defined range)
         orient = Quaternion(quat[0],quat[1],quat[2],quat[3])
         pose = Pose(Point(x=0.5,y=-0.8,z=0.75), orient) #TODO: Given some randomness to position (in a defined range)
         object_id = f"object_{spawn_idx}"
+        print(f"\n#####\noggetto --> {object_id}    -----    scale --> {scale}\n#######\n")
         self.sm(object_id, object_urdf, '', pose, 'world')
         self.spawned_objects.append(object_id)
         # rospy.sleep(1)
