@@ -27,6 +27,8 @@ class FactoryController:
         self.data_lock = threading.Lock()
         self.is_picking = threading.Event()
         self.is_conveyor_on = threading.Event()
+        self.warmup = threading.Event()
+        self.warmup_iters = 0
 
         self.rate = rospy.Rate(30)
         self.robot_status = 'idle'
@@ -39,6 +41,8 @@ class FactoryController:
         self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", Detection3D, self.poses_callback)
         self.panda_status_subscriber = rospy.Subscriber('/panda/pick_status', String, self.panda_status_callback)
         self.start_factory()
+
+        
 
     
     def poses_callback(self, msg):
@@ -57,7 +61,7 @@ class FactoryController:
         status = msg.data
         rospy.loginfo(f'Robot status: {status}')
         self.robot_status = status
-        if status != 'grasping' and not self.is_conveyor_on.is_set():
+        if status == 'releasing' and not self.is_conveyor_on.is_set():
             self.start_factory()
  
     
@@ -73,7 +77,6 @@ class FactoryController:
 
     def stop_factory(self):
         rospy.loginfo('Stop Factory')
-        self.is_picking.set()
         self.is_conveyor_on.clear()
         self.conveyor_control(power=0.0)
         self.spawn_service(False)
@@ -114,17 +117,30 @@ class FactoryController:
             distance = np.abs(position[1] - 0)
             is_pick_position =  distance < 1e-2
 
-            # print(positions)
-
-            if is_pick_position and class_id in [0, 1]:
-                self.is_picking.set()
-                self.stop_factory()
-                pick_pos = position
-                pick_scale = scale
-                pick_orient = orient
-                place_pos = self.bins[class_id]
-                
-                self.send_pick_and_place_req(pick_pos, pick_orient, pick_scale, place_pos)
+            if is_pick_position:
+                rospy.loginfo('is pick position')
+                if not self.warmup.is_set():
+                    rospy.loginfo('warmup not set')
+                    if class_id in [0, 1]:
+                        self.stop_factory()
+                        self.warmup.set()
+                        self.warmup_iters = 0                        
+                elif self.warmup_iters <= 5:
+                    self.warmup_iters += 1
+                    rospy.loginfo(f'wamup iteration {self.warmup_iters}')
+                else:
+                    self.warmup.clear()
+                    self.warmup_iters = 0
+                    if class_id in [0, 1]:
+                        self.is_picking.set()
+                        pick_pos = position
+                        pick_scale = scale
+                        pick_orient = orient
+                        rospy.loginfo(f'class_id: {class_id}')
+                        place_pos = self.bins[class_id]
+                        self.send_pick_and_place_req(pick_pos, pick_orient, pick_scale, place_pos)
+                    else:
+                        self.start_factory()
                 
             self.rate.sleep()
 

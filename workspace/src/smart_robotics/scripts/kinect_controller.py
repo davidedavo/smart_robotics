@@ -92,9 +92,13 @@ class KinectController:
 
     def set_image_data(self, rgb, depth):
         with self._images_lock:
-            if self.image_queue.full():
-                self.image_queue.get(block=False)
-            self.image_queue.put({'rgb':rgb, 'depth': depth, 'timestep': self._next_timestep})
+            try:
+                if self.image_queue.full():
+                    self.image_queue.get(block=True)
+                self.image_queue.put({'rgb':rgb, 'depth': depth, 'timestep': self._next_timestep})
+            except Exception as e:
+                print(e)
+                pass
             self._next_timestep += 1
 
     def get_image_data(self):
