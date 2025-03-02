@@ -23,14 +23,6 @@ class HardCodedObjectDetector(ObjectDetector):
         yc = y0 + h/2
         bboxes=[[xc, yc, w, h]]
 
-        # cylinder
-        x0 = 333
-        y0 = 189
-        w = 38
-        h = 39
-        xc = x0 + w/2
-        yc = y0 + h/2
-        bboxes += [[xc, yc, w, h]]
         return np.array(bboxes, dtype=np.int32)
     
 
@@ -92,6 +84,11 @@ class ContourObjectDetector(ObjectDetector):
             # Calcola la circularità
             circularity = area / circle_area if circle_area != 0 else 0
 
+            rect = cv2.minAreaRect(cnt)
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            w, h = rect[1]
+
             # Verifica se il contorno ha 4 lati (forma poligonale) e valuta l'aspect ratio
             if len(approx) == 4:
                 aspect_ratio = w / float(h)  # rapporto tra larghezza e altezza
@@ -106,14 +103,16 @@ class ContourObjectDetector(ObjectDetector):
                     class_id = 1
 
                 # Aggiungiamo la bbox trovata
-                bboxes.append([x + w // 2, y + h // 2, w, h])
+                # bboxes.append([x + w // 2, y + h // 2, w, h])
+                bboxes.append(rect)
                 classes_ids += [class_id]
 
             # Se non ha 4 lati e la circularità è elevata, lo consideriamo un cilindro
             elif circularity > 0.8:
                 # print(f"Cilindro rilevato: {(x, y, w, h)}")
                 #cv2.drawContours(img_test, [approx], -1, (0, 0, 255), 2)  # Disegna in rosso
-                bboxes.append([x + w // 2, y + h // 2, w, h])
+                # bboxes.append([x + w // 2, y + h // 2, w, h])
+                bboxes.append(rect)
                 class_id = 2
                 classes_ids += [class_id]
 
@@ -122,5 +121,6 @@ class ContourObjectDetector(ObjectDetector):
         # cv2.waitKey(1)
 
         # Ritorna le bbox come array numpy e la lista di flag
-        return np.array(bboxes, dtype=np.int32), np.array(classes_ids, dtype=np.int32)[:, None]
+        # return np.array(bboxes, dtype=np.int32), np.array(classes_ids, dtype=np.int32)[:, None]
+        return bboxes, classes_ids
 

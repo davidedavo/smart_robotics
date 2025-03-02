@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import threading
 import rospy, tf, rospkg, random
 from gazebo_msgs.srv import DeleteModel, SpawnModel, GetModelState
@@ -54,7 +55,7 @@ class ObjectSpawnerController():
             object_urdf = f.read() #TODO: Make it parametrizable in terms of scale and color
 
 
-        scale = round(random.uniform(0.6, 1.0), 2)  # Scala casuale --> 0.57 scivola
+        scale = round(random.uniform(0.7, 1.2), 2)  # Scala casuale --> 0.57 scivola
         if "red_cube" in object_urdf:
             new_size = 0.06 * scale
             object_urdf = object_urdf.replace('<box size="0.06 0.06 0.06"/>',
@@ -74,7 +75,8 @@ class ObjectSpawnerController():
                 
 
         spawn_idx = len(self.spawned_objects)
-        quat = tf.transformations.quaternion_from_euler(0,0,0) #TODO: Give some randomness to rotation (in a defined range)
+        degree = random.uniform(0, 360)
+        quat = tf.transformations.quaternion_from_euler(0,0, math.radians(degree))
         orient = Quaternion(quat[0],quat[1],quat[2],quat[3])
         pose = Pose(Point(x=0.5,y=-0.8,z=0.75), orient) #TODO: Given some randomness to position (in a defined range)
         object_id = f"object_{spawn_idx}"

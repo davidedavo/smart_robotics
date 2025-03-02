@@ -5,6 +5,7 @@ from pathlib import Path
 import signal
 import threading
 from time import sleep
+from typing import List, Tuple
 import numpy as np
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
@@ -15,6 +16,7 @@ import tf.transformations as tft
 from sensor_msgs.msg import Image, CameraInfo
 from geometry_msgs.msg import PoseArray, Pose, Point, Quaternion, Vector3
 from custom_msg.msg import Detection3D
+from scipy.spatial.transform import Rotation as R
 from object_detection import HardCodedObjectDetector, ContourObjectDetector
 
 
@@ -29,6 +31,34 @@ def backproject_points(points_2d:np.ndarray, depths:np.ndarray, K:np.ndarray, c2
     p_world = p_cam_hom @ c2w.T
     return p_world[:, :3]
 
+def compute_rotation(rects):
+    rots = []
+    for rect in rects:
+        angle = rect[-1]
+        rotation_z = np.deg2rad(angle)  # Convert to radians
+        Rz = np.array([
+            [np.cos(rotation_z), -np.sin(rotation_z), 0],
+            [np.sin(rotation_z),  np.cos(rotation_z), 0],
+            [0, 0, 1]
+        ])
+        rots.append(Rz)
+    rots = np.stack(rots, axis=0)
+    return rots
+
+
+def permute_rect_points(bbox_points):
+    masks = []
+    p_center = bbox_points.mean(axis=0, keepdims=True)
+    delta = bbox_points - p_center
+    masks += [(delta[..., 0] < 0) & (delta[..., 1] < 0)]
+    masks += [(delta[..., 0] >= 0) & (delta[..., 1] < 0)]
+    masks += [(delta[..., 0] >= 0) & (delta[..., 1] >= 0)]
+    masks += [(delta[..., 0] < 0) & (delta[..., 1] >= 0)]
+    
+    masks = np.array(masks)
+    perms = np.nonzero(np.array(masks))[1]
+    return bbox_points[perms]
+
 
 class KinectController:
         
@@ -36,7 +66,6 @@ class KinectController:
         self.bridge = CvBridge()        
 
         self.K = None
-
 
         # Subscribers for RGB and depth images
         self.rgb_sub = Subscriber("/kinect/color/image_raw", Image)
@@ -145,18 +174,20 @@ class KinectController:
     #     # self.processing_thread.join()
     #     exit()
 
-    def is_in_area(self, bboxes, target_box):
-        if bboxes.shape[0] == 0:
-            return bboxes        
-        x_center, y_center = bboxes[:, 0], bboxes[:, 1]
+    def is_in_area(self, rects, target_box):
+        if len(rects) == 0:
+            return rects        
+        x_center = np.array([rect[0][0] for rect in rects], dtype=np.float32)
+        y_center = np.array([rect[0][1] for rect in rects], dtype=np.float32)
+        # x_center, y_center = rects[:, 0], rects[:, 1]
 
         xi_target = target_box[0, 0]  - target_box[0, 2] / 2
         yi_target = target_box[0, 1]  - target_box[0, 3] / 2
         xf_target = target_box[0, 0]  + target_box[0, 2] / 2
         yf_target = target_box[0, 1]  + target_box[0, 3] / 2
 
-        centered_boxes = (x_center > xi_target) & (x_center < xf_target) & (y_center > yi_target) & (y_center < yf_target)
-        return centered_boxes
+        mask = (x_center > xi_target) & (x_center < xf_target) & (y_center > yi_target) & (y_center < yf_target)
+        return mask
         
     def get_target_box(self, w, h, area_ratio=0.05):
         x_c = w / 2
@@ -166,52 +197,116 @@ class KinectController:
         h = h*area_ratio
         return np.array([[x_c, y_c, w, h]])
     
-    def get_non_detection_pixels(self, image, bboxes, margin=20):
+    # def get_non_detection_pixels(self, image, bboxes, margin=20):
+    #     H, W = image.shape[:2]
+    #     mask = np.ones((H, W), dtype=bool)
+        
+    #     for bbox in bboxes:
+    #         xc, yc, w, h = bbox
+    #         x1 = max(int(xc - w / 2 - margin), 0)
+    #         y1 = max(int(yc - h / 2 - margin), 0)
+    #         x2 = min(int(xc + w / 2 + margin), W)
+    #         y2 = min(int(yc + h / 2 + margin), H)
+    #         mask[y1:y2, x1:x2] = False
+        
+    #     non_detection_pixels = image[mask]
+    #     return non_detection_pixels
+
+    def get_non_detection_pixels(self, image, rects, margin=20):
         H, W = image.shape[:2]
         mask = np.ones((H, W), dtype=bool)
         
-        for bbox in bboxes:
-            xc, yc, w, h = bbox
-            x1 = max(int(xc - w / 2 - margin), 0)
-            y1 = max(int(yc - h / 2 - margin), 0)
-            x2 = min(int(xc + w / 2 + margin), W)
-            y2 = min(int(yc + h / 2 + margin), H)
-            mask[y1:y2, x1:x2] = False
+        for rect in rects:
+            box = cv2.boxPoints(rect)
+            box = np.int0(box)
+            
+            # Create a mask for the rotated rectangle
+            rect_mask = np.zeros((H, W), dtype=np.uint8)
+            cv2.fillPoly(rect_mask, [box], 255)
+            
+            # Apply margin by dilating the mask
+            kernel = np.ones((margin, margin), np.uint8)
+            rect_mask = cv2.dilate(rect_mask.astype(np.uint8), kernel, iterations=1)
+            rect_mask = rect_mask > 127
+
+            # Combine the masks
+            mask &= ~rect_mask
         
         non_detection_pixels = image[mask]
         return non_detection_pixels
     
-    def compute_poses_scales(self, bboxes:np.ndarray, depth_image: np.ndarray):
-        if bboxes.ndim == 1:
-            bboxes = bboxes[None]
-        B = bboxes.shape[0]
-        assert bboxes.shape == (B, 4)
-        x_center, y_center = bboxes[:, 0], bboxes[:, 1]
+    def compute_poses_scales(self, rects:List[Tuple], depth_image: np.ndarray):
+        B = len(rects)
+        if B == 0:
+            return None, None, None
+        x_center = np.array([rect[0][0] for rect in rects], dtype=np.int64)
+        y_center = np.array([rect[0][1] for rect in rects], dtype=np.int64)
         depth_object = depth_image[y_center, x_center][..., None]
 
-        non_detection_depths = self.get_non_detection_pixels(depth_image, bboxes)
+        non_detection_depths = self.get_non_detection_pixels(depth_image, rects)
         depth_table = np.median(non_detection_depths).repeat(B)[..., None]
-
-        #depth_table = depth_image[281, 310].repeat(B)[..., None] # TODO: Automize this
         
         mid_depth = (depth_table + depth_object) / 2
         
-        p_center = bboxes[:, :2].copy().astype(np.float32)
-        p_left_top = p_center - bboxes[:, 2:4] / 2
-        p_right_bottom = p_center + bboxes[:, 2:4] / 2
+        # p_center = bboxes[:, :2].copy().astype(np.float32)
+        # p_left_top = p_center - bboxes[:, 2:4] / 2
+        # p_right_bottom = p_center + bboxes[:, 2:4] / 2
 
+        p_center = np.array([[rect[0][0], rect[0][1]] for rect in rects], dtype=np.float32)
+        bboxes_points = np.array([cv2.boxPoints(rect) for rect in rects], dtype=np.float32)
+
+        for i in range(bboxes_points.shape[0]):
+            perm_points = permute_rect_points(bboxes_points[i])
+            bboxes_points[i] = perm_points
+
+        # p_left_top = np.array([cv2.boxPoints(rect)[2] for rect in rects], dtype=np.float32)
+        # p_right_bottom = np.array([cv2.boxPoints(rect)[0] for rect in rects], dtype=np.float32)
+
+        points_shape  = bboxes_points.shape
+        bboxes_points = bboxes_points.reshape(-1, 2)
+        
         # Points in world coordinate
         p_center_w = backproject_points(p_center, depth_object, self.K, self.c2w)
-        p_left_top_w = backproject_points(p_left_top, mid_depth, self.K, self.c2w)
-        p_right_bottom_w = backproject_points(p_right_bottom, mid_depth, self.K, self.c2w)
+
+        mid_depth = mid_depth[:, None].repeat(4, axis=1).reshape(-1, 1)
+        p_bboxes_w = backproject_points(bboxes_points, mid_depth, self.K, self.c2w)
+
+        p_bboxes_w = p_bboxes_w.reshape(*points_shape[:2], 3)
+
+        # Point are expressed as [TL, TR, BR, BL]
+        scales = np.zeros((B, 3), dtype=np.float32)
+        a = p_bboxes_w[:, 1] - p_bboxes_w[:, 0]
+        b = p_bboxes_w[:, 3] - p_bboxes_w[:, 0]
+        a_norm = np.linalg.norm(a, axis=-1)[..., None]
+        b_norm = np.linalg.norm(b, axis=-1)[..., None]
+        a_dir = a / (a_norm + 1e-10)
+        b_dir = b / (b_norm + 1e-10)
+
+        R_objects = np.eye(3)[None].repeat(B, axis=0)
+        mask = (a_norm > b_norm)#[..., None]
+        R_objects[:, 0, :] = np.where(mask, a_dir, b_dir)
+        R_objects[:, 1, :] = np.cross(R_objects[:, 2], R_objects[:, 0])
+        scales[:, [0]] = np.where(mask, a_norm, b_norm)
+        scales[:, [1]] = np.where(mask, b_norm, a_norm)
+ 
+        scales[:, [2]] = depth_table - depth_object
+
+        # R = np.eye(4)
+        quats = R.from_matrix(R_objects).as_quat()
+
+        # Convert the batch of rotation matrices to quaternions
+        # quats = rotations.as_quat()
+        quats_wxyz = quats[:, [3, 0, 1, 2]]
         
-        scales = p_right_bottom_w - p_left_top_w
-        scales[:, [-1]] = depth_table - depth_object
+        # identity_quat = np.zeros((B, 4), dtype=np.float32)
+        # identity_quat[:, 0] = 1.
 
-        orientations = np.zeros((B, 4), dtype=np.float32)
-        orientations[:, 0] = 1.
+        # angles = np.array([rect[2] for rect in rects])
+        # mask = np.abs(angles) == 90
+        # if mask.sum() > 0:
+        #     quats_wxyz[mask] = identity_quat[mask]
 
-        return p_center_w, orientations, scales
+        return p_center_w, quats_wxyz, scales
 
     def process(self):
         while not rospy.is_shutdown():
@@ -229,31 +324,19 @@ class KinectController:
             rospy.loginfo(f'Processing timestep {timestep}')
 
             # Otteniamo le bbox e la lista dei flag (True se quadrato, False se non quadrato)
-            bboxes, classes_ids = self.object_detector.detect_box(rgb)
+            rects, classes_ids = self.object_detector.detect_box(rgb)
             target_box = self.get_target_box(rgb.shape[1], rgb.shape[0])
 
             # Disegna tutte le bbox sull'immagine (verde per quadrato, rosso per non quadrato)
             overlay = rgb.copy()
             overlay = (overlay * 255).astype(np.uint8)
-            overlay = draw_bboxes(overlay, bboxes, classes_ids)
+            overlay = draw_rects(overlay, rects, classes_ids)
             overlay = draw_bboxes(overlay, target_box, [3])
             
             ros_image = self.bridge.cv2_to_imgmsg(overlay, encoding="rgb8")
             self.image_publisher.publish(ros_image)
-            
-            # Filtra le bbox non quadrate (quelle con flag False)
-            filtered_bboxes = []
-            if bboxes.shape[0] > 0:
-                mask = self.is_in_area(bboxes, target_box)
-                filtered_bboxes = bboxes[mask]
-                classes_ids = classes_ids[mask]
-            if len(filtered_bboxes) == 0:
-                self.rate.sleep()
-                continue
 
-            filtered_bboxes = filtered_bboxes[[0]]
-            classes_ids = classes_ids[[0]]
-            positions, orientations, scales = self.compute_poses_scales(filtered_bboxes, depth)
+            positions, orientations, scales = self.compute_poses_scales(rects, depth)
             
             if positions is None:
                 self.rate.sleep()
@@ -265,6 +348,21 @@ class KinectController:
                 self.rate.sleep()
                 continue
 
+            filtered_rects = []
+            if len(rects) > 0:
+                mask = self.is_in_area(rects, target_box)
+                filtered_rects = [rect for i,rect in enumerate(rects) if mask[i]]
+                classes_ids = [cid for i,cid in enumerate(classes_ids) if mask[i]]
+                positions = positions[mask]
+                scales = scales[mask]
+                orientations = orientations[mask]
+                # filtered_bboxes = rects[mask]
+                # classes_ids = classes_ids[mask]
+            if len(filtered_rects) == 0:
+                self.rate.sleep()
+                continue
+            
+            filtered_rect = filtered_rects[0]
             class_id = int(classes_ids[0])
 
             try:
@@ -310,7 +408,16 @@ def draw_bboxes(image, bboxes, classes_ids):
         h = int(h)
         color = COLORS[int(class_id)]
         image = cv2.rectangle(image, (x, y), (x + w, y + h), color, 2)
-        image = cv2.putText(image, str(bbox), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        # image = cv2.putText(image, str(bbox), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+    return image
+
+
+def draw_rects(image, rects, classes_ids):
+    for i, (rect, class_id) in enumerate(zip(rects, classes_ids)):
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
+        color = COLORS[int(class_id)]
+        image = cv2.drawContours(image, [box], 0, color, 2)
     return image
 
 

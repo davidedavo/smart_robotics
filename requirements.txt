@@ -1,6 +1,6 @@
 numpy==1.21
 numba
-scipy
+scipy>=1.4.0
 panda-robot
 future
 opencv-python

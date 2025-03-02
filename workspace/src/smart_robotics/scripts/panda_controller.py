@@ -10,7 +10,10 @@ from time import sleep
 import numpy as np
 import rospy
 from panda_robot import PandaArm
+import tf
+import tf.transformations as tft
 from std_msgs.msg import String
+from scipy.spatial.transform import Rotation as R
 from custom_msg.msg import PosesWithScales
 from custom_msg.srv import PickObject, PickObjectResponse
 
@@ -22,6 +25,16 @@ def calculate_rotation(start, target):
     angle_rad = math.atan2(delta_y, delta_x)
     
     return angle_rad
+
+
+def get_transform_matrix(t, q):
+    R = tft.quaternion_matrix(q)
+    t = np.array(t)
+    trans_matrix = np.eye(4, dtype=np.float32)
+    trans_matrix[:3, :3] = R[:3, :3]
+    trans_matrix[:3, 3] = t
+    return trans_matrix
+
 
 
 class PandaController:
@@ -38,9 +51,20 @@ class PandaController:
         # self.is_processing = threading.Event()
         # self.is_processing.set()
         # self.processing_thread = threading.Thread(target=self._process)
-
+        sleep(1)
         self.pick_and_place_service = rospy.Service('/panda/pick_and_place', PickObject, self.handle_pick_place_service)
         self.status_publisher = rospy.Publisher('/panda/pick_status', String, queue_size=10) # ["idle", "grasping", "releasing"]
+
+        self.tf_listener = tf.TransformListener()
+        self.tf_listener.waitForTransform('panda_hand', 'panda_link0', rospy.Time(0), rospy.Duration(4.0))
+        self.tf_listener.waitForTransform('panda_link0', 'panda_rightfinger', rospy.Time(0), rospy.Duration(4.0))
+        self.tf_listener.waitForTransform('panda_link0', 'panda_leftfinger', rospy.Time(0), rospy.Duration(4.0))
+        
+
+        # T_lf_to_0 = get_transform_matrix(lf_t, lf_q)
+        # T_rf_to_0 = get_transform_matrix(rf_t, rf_q)
+        # T_0_to_hand = get_transform_matrix(*hand_transforms)
+        pass
         
         # self.objects_poses_subscriber = rospy.Subscriber("/kinect_controller/detected_poses", PosesWithScales, self.poses_callback)
         # self.processing_thread.start()
@@ -59,17 +83,34 @@ class PandaController:
 
     def grasp_task(self, target_pos, target_quat = np.array([1., 0., 0., 0.]), target_scales=np.array([0.05, 0.05, 0.05])):
         self.status_publisher.publish('grasping')
+        
+        # rf_t, rf_q = self.tf_listener.lookupTransform('panda_link0', 'panda_rightfinger', rospy.Time(0))
+        # lf_t, lf_q = self.tf_listener.lookupTransform('panda_link0', 'panda_leftfinger', rospy.Time(0))
+        # ph_t, ph_q = self.tf_listener.lookupTransform('panda_link0', 'panda_hand', rospy.Time(0))
+        
+        # R_w_h = tft.quaternion_matrix(ph_q)[:3, :3]
+
+        target_quat_xyzw = target_quat[[1, 2, 3, 0]]
+        target_rot = R.from_quat(target_quat_xyzw).as_matrix()
+
+        T_w_e = np.eye(3)
+        T_w_e[[1, 2]] *= -1
+        ee_rot = T_w_e @ target_rot
+        ee_quat = R.from_matrix(ee_rot).as_quat()
+
+        identity_quat = np.array([1., 0., 0., 0.])
         target_pos[-1] += 0.09
         target_pos[0] += 0.01
 
         intermediate_pose = target_pos.copy()
         intermediate_pose[-1] += 0.2
 
-        ret, int_joints = self.panda.inverse_kinematics(intermediate_pose, target_quat)
+        ret, int_joints = self.panda.inverse_kinematics(intermediate_pose, ee_quat)
         if ret or True:
             self.panda.move_to_joint_position(int_joints)
         
-        ret, tgt_joints = self.panda.inverse_kinematics(target_pos, target_quat)
+        
+        ret, tgt_joints = self.panda.inverse_kinematics(target_pos, ee_quat)
         if ret or True:
             self.panda.move_to_joint_position(tgt_joints)
         
