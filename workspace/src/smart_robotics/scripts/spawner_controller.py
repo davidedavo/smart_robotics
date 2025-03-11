@@ -55,7 +55,7 @@ class ObjectSpawnerController():
             object_urdf = f.read() #TODO: Make it parametrizable in terms of scale and color
 
 
-        scale = round(random.uniform(0.7, 1.2), 2)  # Scala casuale --> 0.57 scivola
+        scale = round(random.uniform(0.7, 1.0), 2)  # Scala casuale --> 0.57 scivola
         if "red_cube" in object_urdf:
             new_size = 0.06 * scale
             object_urdf = object_urdf.replace('<box size="0.06 0.06 0.06"/>',

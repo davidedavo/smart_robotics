@@ -1,11 +1,12 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name='kinect'>
-  <xacro:arg name="kinect_xyz" default="0 0 0"/>
-  <xacro:arg name="kinect_rpy" default="0 0 0"/>
+  <!-- <xacro:arg name="kinect_xyz" default="0 0 0"/>
+  <xacro:arg name="kinect_rpy" default="0 0 0"/> -->
       <link name="world" />
 
       <joint name="camera_joint" type="fixed">
-        <origin xyz="$(arg kinect_xyz)" rpy="$(arg kinect_rpy)"/>
+        <!-- <origin xyz="$(arg kinect_xyz)" rpy="$(arg kinect_rpy)"/> -->
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0"/>
         <parent link="world"/>
         <child link="camera_link"/>
       </joint>
