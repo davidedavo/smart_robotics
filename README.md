@@ -26,18 +26,3 @@ catkin build
 source devel/setup.bash
 roslaunch smart_robotics smart_robotics.launch
 ```
-
-In another terminal:
-```bash
-source devel/setup.bash
-cd src/smart_robotics
-python scripts/kinect_controller.py
-```
-
-In another terminal:
-```bash
-source devel/setup.bash
-cd src/smart_robotics
-python scripts/panda_controller.py
-```
-
